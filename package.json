@@ -1,0 +1,11 @@
+{
+  "name": "runserver",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @runserver/web dev",
+    "dev:backend": "pnpm --filter @runserver/backend dev",
+    "build": "pnpm -r build",
+    "prisma:generate": "pnpm --filter @runserver/backend prisma:generate",
+    "prisma:migrate": "pnpm --filter @runserver/backend prisma:migrate"
+  }
+}

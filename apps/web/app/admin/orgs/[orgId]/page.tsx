@@ -1,0 +1,211 @@
+// apps/web/app/admin/orgs/[orgId]/page.tsx
+"use client";
+
+import { useEffect, useState } from "react";
+import { getOrganization, createService, updateService, updateOrgActive, updateOrgUserActive } from "../../../../lib/adminApi";
+import type { Organization, Service, OrgUser, ServiceCategory, BillingCycle } from "@runserver/types";
+
+interface Params {
+  params: { orgId: string };
+}
+
+const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "OTHER"];
+
+export default function AdminOrgDetailPage({ params }: Params) {
+  const { orgId } = params;
+  const [org, setOrg] = useState<(Organization & { services: Service[]; users: OrgUser[] }) | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showAddService, setShowAddService] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    category: "SERVER" as ServiceCategory,
+    description: "",
+    monthlyAmount: "",
+    billingCycle: "MONTHLY" as BillingCycle,
+    nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function refresh() {
+    const data = await getOrganization(orgId);
+    setOrg(data.org);
+  }
+
+  useEffect(() => {
+    refresh().finally(() => setLoading(false));
+  }, [orgId]);
+
+  async function handleAddService(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      await createService(orgId, { ...form, monthlyAmount: Number(form.monthlyAmount) });
+      setShowAddService(false);
+      setForm({ ...form, name: "", description: "", monthlyAmount: "" });
+      await refresh();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleStatus(service: Service) {
+    const next = service.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    await updateService(orgId, service.id, { status: next });
+    await refresh();
+  }
+
+  async function toggleOrgActive() {
+    if (!org) return;
+    await updateOrgActive(orgId, !org.isActive);
+    await refresh();
+  }
+
+  async function toggleUserActive(userId: string, isActive: boolean) {
+    await updateOrgUserActive(orgId, userId, !isActive);
+    await refresh();
+  }
+
+  if (loading) return <div style={{ color: "#868D99", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Loading…</div>;
+  if (!org) return <div style={{ color: "#F87171", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Organization not found.</div>;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0F1115", color: "#ECEEF2", fontFamily: "system-ui, sans-serif" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 80px" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#E8A33D", textTransform: "uppercase" }}>Admin</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+          <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>{org.name}</h1>
+          <button
+            onClick={toggleOrgActive}
+            style={{
+              ...smallBtnStyle,
+              background: org.isActive ? "#282D37" : "#E8A33D",
+              color: org.isActive ? "#ECEEF2" : "#141414",
+            }}
+          >
+            {org.isActive ? "Deactivate client" : "Reactivate client"}
+          </button>
+        </div>
+        <div style={{ fontSize: 13, color: "#868D99", marginBottom: 24 }}>
+          /{org.slug} &middot; {org.preferredGateway} &middot; {Number(org.yearlyDiscountPct)}% yearly discount
+          {!org.isActive && <span style={{ color: "#F87171" }}> &middot; INACTIVE — client cannot log in</span>}
+        </div>
+
+        {/* Users */}
+        <Section title="Users">
+          {org.users.map((u) => (
+            <Row key={u.id}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name || u.email}</div>
+                <div style={{ fontSize: 12, color: "#868D99" }}>{u.email}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={badgeStyle}>{u.role}</span>
+                <button
+                  onClick={() => toggleUserActive(u.id, u.isActive)}
+                  style={{
+                    ...smallBtnStyle,
+                    padding: "6px 10px", fontSize: 11.5,
+                    background: u.isActive ? "#282D37" : "#E8A33D",
+                    color: u.isActive ? "#ECEEF2" : "#141414",
+                  }}
+                >
+                  {u.isActive ? "Deactivate" : "Reactivate"}
+                </button>
+              </div>
+            </Row>
+          ))}
+        </Section>
+
+        {/* Services */}
+        <Section
+          title="Services"
+          action={
+            <button onClick={() => setShowAddService((s) => !s)} style={smallBtnStyle}>
+              {showAddService ? "Cancel" : "+ Add service"}
+            </button>
+          }
+        >
+          {showAddService && (
+            <form onSubmit={handleAddService} style={{ padding: 16, background: "#0F1115", borderRadius: 10, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <input placeholder="Service name (e.g. Brevo)" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as ServiceCategory })} style={{ ...inputStyle, flex: 1 }}>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={form.billingCycle} onChange={(e) => setForm({ ...form, billingCycle: e.target.value as BillingCycle })} style={{ ...inputStyle, flex: 1 }}>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="YEARLY">Yearly</option>
+                </select>
+              </div>
+              <input placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={inputStyle} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <input type="number" step="0.01" placeholder="Monthly amount (USD)" required value={form.monthlyAmount} onChange={(e) => setForm({ ...form, monthlyAmount: e.target.value })} style={{ ...inputStyle, flex: 1 }} />
+                <input type="date" required value={form.nextDueDate} onChange={(e) => setForm({ ...form, nextDueDate: e.target.value })} style={{ ...inputStyle, flex: 1 }} />
+              </div>
+              {error && <p style={{ color: "#F87171", fontSize: 13, margin: 0 }}>{error}</p>}
+              <button type="submit" disabled={saving} style={smallBtnStyle}>{saving ? "Saving…" : "Save service"}</button>
+            </form>
+          )}
+
+          {org.services.length === 0 && !showAddService && <p style={{ color: "#868D99", fontSize: 13 }}>No services yet.</p>}
+
+          {org.services.map((s) => (
+            <Row key={s.id}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                <div style={{ fontSize: 12, color: "#868D99" }}>
+                  {s.category} &middot; {s.billingCycle === "YEARLY" ? "Yearly" : "Monthly"} &middot; next due {new Date(s.nextDueDate).toLocaleDateString()}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontFamily: "monospace", fontSize: 14 }}>${Number(s.monthlyAmount).toFixed(2)}/mo</span>
+                <button onClick={() => toggleStatus(s)} style={{ ...smallBtnStyle, background: s.status === "ACTIVE" ? "#282D37" : "#E8A33D", color: s.status === "ACTIVE" ? "#ECEEF2" : "#141414" }}>
+                  {s.status === "ACTIVE" ? "Pause" : "Activate"}
+                </button>
+              </div>
+            </Row>
+          ))}
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{title}</h2>
+        {action}
+      </div>
+      <div style={{ border: "1px solid #282D37", borderRadius: 12, background: "#171A21", padding: 4 }}>{children}</div>
+    </div>
+  );
+}
+
+function Row({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 12px", borderBottom: "1px solid #282D37" }}>
+      {children}
+    </div>
+  );
+}
+
+const badgeStyle: React.CSSProperties = {
+  fontSize: 11, fontFamily: "monospace", background: "#0F1115", border: "1px solid #282D37",
+  borderRadius: 6, padding: "3px 8px", color: "#868D99",
+};
+
+const inputStyle: React.CSSProperties = {
+  padding: "9px 10px", background: "#171A21", border: "1px solid #282D37", borderRadius: 8, color: "#ECEEF2", fontSize: 13,
+};
+
+const smallBtnStyle: React.CSSProperties = {
+  background: "#E8A33D", color: "#141414", border: "none", borderRadius: 8,
+  padding: "8px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer",
+};

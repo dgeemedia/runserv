@@ -1,0 +1,64 @@
+# ------------------------------------------------------------------
+# Render Blueprint — one free-tier web service.
+#
+# The two scheduled billing jobs (generating payment requests, sending
+# reminders) do NOT run here as Render Cron Jobs — that feature requires
+# a paid Render plan. Instead they run for free via Vercel's Cron Jobs
+# (Hobby plan includes 2, daily), which call two protected endpoints on
+# this API — see apps/web/vercel.json and apps/backend/src/routes/
+# internal.routes.ts. Set CRON_SECRET below to the same value you put
+# in Vercel's BACKEND_CRON_SECRET env var, or the trigger calls will
+# get rejected with 401. Full walkthrough in DEPLOYMENT.md.
+# ------------------------------------------------------------------
+services:
+  - type: web
+    name: runserver-api
+    runtime: node
+    region: oregon # change to whatever's closest to your users/Supabase project
+    plan: free
+    rootDir: .
+    buildCommand: >
+      NODE_ENV=development pnpm install &&
+      pnpm --filter @runserver/backend prisma:generate &&
+      pnpm --filter @runserver/backend build
+    startCommand: pnpm --filter @runserver/backend start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ENABLE_INPROCESS_CRON
+        value: "false" # scheduling is handled by Vercel Cron calling /internal/jobs/* instead
+      - key: DATABASE_URL
+        sync: false # paste Supabase's pooled connection string in the Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: WEB_APP_URL
+        sync: false # your Vercel URL, e.g. https://runserver.vercel.app — set after the frontend is deployed
+      - key: API_URL
+        sync: false # this service's own Render URL, e.g. https://runserver-api.onrender.com
+      - key: CRON_SECRET
+        sync: false # must match BACKEND_CRON_SECRET on Vercel — see DEPLOYMENT.md
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: RunServer
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_PUBLIC_KEY
+        sync: false
+      - key: FLUTTERWAVE_WEBHOOK_SECRET_HASH
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false # only read by the one-off seed script, not the running server
+      - key: ADMIN_PASSWORD
+        sync: false

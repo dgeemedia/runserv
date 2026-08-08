@@ -1,0 +1,285 @@
+// ==========================================================
+// RunServer — Prisma schema
+// One org = one client company. Each org has its own users,
+// services, payment requests, and payment history.
+// ==========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------------
+// Organizations (your clients)
+// ----------------------------------------------------------
+
+model Organization {
+  id                String         @id @default(cuid())
+  name              String
+  slug              String         @unique // used in URLs: runserver.app/acme-studio
+  currency          String         @default("USD")
+  yearlyDiscountPct Decimal        @default(15.0) @db.Decimal(5, 2) // % off when billed yearly
+  preferredGateway  PaymentGateway @default(PAYSTACK) // which gateway checkout uses for this org
+  isActive          Boolean        @default(true)
+  createdByAdminId  String?
+  createdByAdmin    AdminUser?     @relation(fields: [createdByAdminId], references: [id])
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  users           User[]
+  services        Service[]
+  paymentRequests PaymentRequest[]
+  payments        Payment[]
+  auditLogs       AuditLog[]
+
+  @@map("organizations")
+}
+
+// ----------------------------------------------------------
+// AdminUser — your (RunServer's) internal staff, distinct from
+// client-org users. Manages orgs, services, and pricing across
+// every client. Deliberately a separate model from `User` so a
+// bug in org-scoping logic can never accidentally grant a client
+// cross-org or admin access.
+// ----------------------------------------------------------
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organizationsCreated Organization[]
+  exchangeRateUpdates  ExchangeRate[]
+
+  @@map("admin_users")
+}
+
+// ----------------------------------------------------------
+// Users — multiple per org, role-scoped
+// ----------------------------------------------------------
+
+enum Role {
+  OWNER // full access: manage users, services, billing
+  FINANCE // can view + pay, cannot manage users/services
+  MEMBER // view-only by default, can be granted pay access
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  orgId              String
+  org                Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  email              String    @unique
+  name               String?
+  passwordHash       String
+  role               Role      @default(MEMBER)
+  mustChangePassword Boolean   @default(true) // forced on first login after invite
+  isActive           Boolean   @default(true)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  invitedTokens InviteToken[]
+  payments      Payment[]     @relation("InitiatedPayments")
+  auditLogs     AuditLog[]
+
+  @@index([orgId])
+  @@map("users")
+}
+
+// One-time tokens for invite / password reset flows
+model InviteToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  type      TokenType @default(INVITE)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("invite_tokens")
+}
+
+enum TokenType {
+  INVITE
+  PASSWORD_RESET
+}
+
+// ----------------------------------------------------------
+// Services — the recurring infra items you bill each org for
+// ----------------------------------------------------------
+
+enum ServiceCategory {
+  API
+  SERVER
+  DATABASE
+  DOMAIN
+  SECURITY
+  STORAGE
+  OTHER
+}
+
+enum ServiceStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+model Service {
+  id            String          @id @default(cuid())
+  orgId         String
+  org           Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name          String          // "Brevo", "Backend API Hosting"
+  category      ServiceCategory @default(OTHER)
+  description   String?
+  monthlyAmount Decimal         @db.Decimal(10, 2) // canonical price; yearly is derived
+  billingCycle  BillingCycle    @default(MONTHLY)  // client's current preference
+  status        ServiceStatus   @default(ACTIVE)
+  nextDueDate   DateTime
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  paymentRequests PaymentRequest[]
+
+  @@index([orgId, status])
+  @@map("services")
+}
+
+// ----------------------------------------------------------
+// Payment requests — one per service per billing period.
+// Generated by a cron job; client checks off which to pay.
+// ----------------------------------------------------------
+
+enum PaymentRequestStatus {
+  UPCOMING // not due yet, shown for visibility
+  DUE      // currently payable
+  OVERDUE  // past due date, unpaid
+  PAID
+  CANCELLED
+}
+
+model PaymentRequest {
+  id           String                @id @default(cuid())
+  orgId        String
+  org          Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  serviceId    String
+  service      Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  periodLabel  String                // "August 2026" or "2026 (Annual)"
+  billingCycle BillingCycle          @default(MONTHLY)
+  amount       Decimal               @db.Decimal(10, 2)
+  currency     String                @default("USD")
+  dueDate      DateTime
+  status       PaymentRequestStatus  @default(UPCOMING)
+  paymentId    String?
+  payment      Payment?              @relation(fields: [paymentId], references: [id])
+  remindersSent Int                  @default(0)
+  lastReminderAt DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([orgId, status])
+  @@index([dueDate])
+  @@map("payment_requests")
+}
+
+// ----------------------------------------------------------
+// Payments — one checkout can settle multiple payment requests
+// ----------------------------------------------------------
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentGateway {
+  PAYSTACK
+  FLUTTERWAVE
+}
+
+model Payment {
+  id                String         @id @default(cuid())
+  orgId             String
+  org               Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  gateway           PaymentGateway
+  gatewayRef        String         @unique // transaction reference from Paystack/Flutterwave (tx_ref for FLW)
+  amount            Decimal        @db.Decimal(12, 2) // amount actually charged, in `currency`
+  currency          String         @default("USD")    // "USD" or "NGN" — whatever the client chose at checkout
+  usdAmount         Decimal        @db.Decimal(12, 2)  // canonical USD value, for reconciliation regardless of charge currency
+  fxRateApplied     Decimal?       @db.Decimal(12, 4)  // USD->NGN effective rate used, null when charged in USD
+  status            PaymentStatus  @default(PENDING)
+  initiatedByUserId String?
+  initiatedBy       User?          @relation("InitiatedPayments", fields: [initiatedByUserId], references: [id])
+  paidAt            DateTime?
+  receiptNumber     String?        @unique
+  receiptUrl        String?        // hosted PDF/link, if generated
+  cardLast4         String?
+  cardBrand         String?
+  rawWebhookPayload Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  paymentRequests PaymentRequest[]
+
+  @@index([orgId])
+  @@map("payments")
+}
+
+// ----------------------------------------------------------
+// Exchange rates — admin-configurable USD->NGN conversion used
+// at checkout when a client chooses to pay in NGN instead of USD.
+// `marketRate` is the raw rate (synced from a market source or set
+// manually); `markupPct` is your buffer on top of it. The effective
+// rate charged to clients is marketRate * (1 + markupPct / 100),
+// computed at checkout time — never stored redundantly here, so
+// there's one place (markupPct) to change your margin.
+// ----------------------------------------------------------
+
+model ExchangeRate {
+  id               String     @id @default(cuid())
+  pair             String     @unique // "USD_NGN"
+  marketRate       Decimal    @db.Decimal(12, 4) // raw rate, e.g. 1 USD = 1550.00 NGN
+  markupPct        Decimal    @default(2.0) @db.Decimal(5, 2) // your margin on top, e.g. 2%
+  source           String     @default("manual") // "manual" or "synced"
+  updatedByAdminId String?
+  updatedByAdmin   AdminUser? @relation(fields: [updatedByAdminId], references: [id])
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@map("exchange_rates")
+}
+
+// ----------------------------------------------------------
+// Audit log — who did what, for accountability across
+// multiple users per org (esp. finance vs owner actions)
+// ----------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   // "payment.initiated", "user.invited", "service.updated", etc.
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@map("audit_logs")
+}
