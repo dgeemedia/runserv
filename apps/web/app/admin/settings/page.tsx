@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getAdminFxRate, previewAdminFxRate, updateAdminFxRate } from "../../../lib/adminApi";
+import { getAdminFxRate, previewAdminFxRate, updateAdminFxRate, sendTestEmail } from "../../../lib/adminApi";
 
 export default function AdminFxSettingsPage() {
   const [rate, setRate] = useState<any>(null);
@@ -15,6 +15,10 @@ export default function AdminFxSettingsPage() {
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof previewAdminFxRate>>["preview"] | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState("");
 
   async function refresh() {
     const data = await getAdminFxRate();
@@ -64,6 +68,20 @@ export default function AdminFxSettingsPage() {
 
   const previewMarkupPct = Number(markupPct) || 0;
   const previewEffective = preview ? preview.suggestedMarketRate * (1 + previewMarkupPct / 100) : null;
+
+  async function handleSendTestEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setTestEmailSending(true);
+    setTestEmailResult("");
+    try {
+      const { message } = await sendTestEmail(testEmailTo);
+      setTestEmailResult(message);
+    } catch (err: any) {
+      setTestEmailResult(err.message);
+    } finally {
+      setTestEmailSending(false);
+    }
+  }
 
   if (loading) return null;
 
@@ -165,6 +183,33 @@ export default function AdminFxSettingsPage() {
             {saving ? "Saving…" : "Save rate"}
           </button>
         </form>
+
+        <div style={{ height: 1, background: "#282D37", margin: "32px 0 24px" }} />
+
+        {/* Email — confirms Brevo is actually working, independent of the FX form above */}
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 8px" }}>Email</h2>
+        <p style={{ color: "#868D99", fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
+          Send a bare-bones test email to confirm <span style={{ fontFamily: "monospace", fontSize: 12 }}>BREVO_API_KEY</span> and
+          sender-domain verification are working, without needing a real invite or payment to trigger one.
+        </p>
+        <form onSubmit={handleSendTestEmail} style={{ display: "flex", gap: 8 }}>
+          <input
+            type="email"
+            required
+            placeholder="you@example.com"
+            value={testEmailTo}
+            onChange={(e) => setTestEmailTo(e.target.value)}
+            style={{ ...inputStyle, flex: 1, marginTop: 0, marginBottom: 0 }}
+          />
+          <button type="submit" disabled={testEmailSending} style={{ ...smallBtnStyle, whiteSpace: "nowrap" }}>
+            {testEmailSending ? "Sending…" : "Send test"}
+          </button>
+        </form>
+        {testEmailResult && (
+          <p style={{ fontSize: 13, marginTop: 10, color: testEmailResult.toLowerCase().includes("sent") ? "#4ADE80" : "#F87171" }}>
+            {testEmailResult}
+          </p>
+        )}
       </div>
     </div>
   );

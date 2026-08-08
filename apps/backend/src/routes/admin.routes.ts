@@ -17,6 +17,7 @@ import {
   updateFxRateAdmin,
   syncFxRateAdmin,
 } from "../controllers/admin.fx.controller.js";
+import { resendInvite, resendReceipt, sendTestEmailAdmin, sendMessageToOrg } from "../controllers/admin.email.controller.js";
 import { requireAdminAuth } from "../middleware/admin.middleware.js";
 
 const router = Router();
@@ -32,6 +33,13 @@ router.post("/admin/orgs/:orgId/services", requireAdminAuth, createService);
 router.patch("/admin/orgs/:orgId/services/:serviceId", requireAdminAuth, updateService);
 
 router.patch("/admin/orgs/:orgId/users/:userId", requireAdminAuth, updateOrgUser);
+router.post("/admin/orgs/:orgId/users/:userId/resend-invite", requireAdminAuth, resendInvite);
+
+router.post("/admin/orgs/:orgId/payments/:paymentId/resend-receipt", requireAdminAuth, resendReceipt);
+
+router.post("/admin/orgs/:orgId/message", requireAdminAuth, sendMessageToOrg);
+
+router.post("/admin/test-email", requireAdminAuth, sendTestEmailAdmin);
 
 router.get("/admin/revenue", requireAdminAuth, getRevenueSummary);
 

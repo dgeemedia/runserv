@@ -1,5 +1,7 @@
 // apps/backend/src/services/email.service.ts
 import SibApiV3Sdk from "sib-api-v3-sdk";
+import { marked } from "marked";
+import sanitizeHtml from "sanitize-html";
 
 const client = SibApiV3Sdk.ApiClient.instance;
 const apiKey = client.authentications["api-key"];
@@ -161,8 +163,8 @@ export async function sendReceiptEmail(params: {
   name?: string;
   orgName: string;
   receiptNumber: string;
-  items: { name: string; amount: string }[];
-  total: string;
+  items: { name: string; amount: string }[]; // line items always shown in USD (canonical service pricing)
+  total: string; // pre-formatted with currency, e.g. "254.50 NGN" or "254.50 USD" — caller decides, this just renders it
   paidAt: string;
   cardLast4?: string;
 }) {
@@ -182,10 +184,87 @@ export async function sendReceiptEmail(params: {
     <table style="width:100%; border-collapse:collapse; margin-bottom:16px; border-top:1px solid #eee; border-bottom:1px solid #eee;">
       ${rows}
     </table>
-    <p style="font-size:18px; font-weight:700; margin:0 0 4px;">Total paid: $${params.total} USD</p>
+    <p style="font-size:18px; font-weight:700; margin:0 0 4px;">Total paid: ${params.total}</p>
     ${params.cardLast4 ? `<p style="color:#999; font-size:13px;">Charged to card ending ${params.cardLast4}</p>` : ""}
     <p style="color:#555; margin-top:20px;">Thanks for keeping ${params.orgName}'s infrastructure running.</p>
   `);
 
-  return send({ to: { email: params.to, name: params.name }, subject: `Receipt #${params.receiptNumber} — $${params.total} paid`, html });
+  return send({ to: { email: params.to, name: params.name }, subject: `Receipt #${params.receiptNumber} — ${params.total} paid`, html });
+}
+
+// ------------------------------------------------------------------
+// 5. Test email — no business meaning, just confirms BREVO_API_KEY and
+// sender-domain verification are actually working from the admin panel,
+// without needing a real invite or payment to trigger a send.
+// ------------------------------------------------------------------
+export async function sendTestEmail(to: string) {
+  const html = layout(`
+    <h2 style="margin:0 0 12px;">Test email</h2>
+    <p style="color:#555; line-height:1.6;">
+      If you're reading this, RunServer's Brevo configuration is working —
+      API key valid, sender domain verified, delivery successful.
+    </p>
+    <p style="color:#999; font-size:12px; margin-top:20px;">Sent from the admin panel, not triggered by any real activity.</p>
+  `);
+
+  return send({ to: { email: to }, subject: "RunServer — test email", html });
+}
+
+// ------------------------------------------------------------------
+// 6. Custom message — free-text email from you to a client, sent from
+// the admin dashboard. Body is authored as Markdown (bold, italics,
+// links, lists), rendered to HTML server-side, and run through an
+// allowlist sanitizer before being sent — the admin composing this is
+// trusted, but the sanitizer stays regardless, since it also strips
+// anything the markdown renderer itself might pass through unexpectedly
+// (e.g. a raw <script> tag typed directly into the body).
+// ------------------------------------------------------------------
+const ALLOWED_TAGS = ["p", "br", "strong", "em", "a", "ul", "ol", "li", "blockquote", "code", "pre", "h3", "h4"];
+
+export async function sendCustomMessageEmail(params: {
+  to: string;
+  name?: string;
+  subject: string;
+  body: string; // Markdown
+}) {
+  const rawHtml = marked.parse(params.body, { async: false, gfm: true, breaks: true }) as string;
+
+  const safeHtml = sanitizeHtml(rawHtml, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: { a: ["href"] },
+    // Only allow http(s)/mailto links — blocks javascript:, data:, etc.
+    allowedSchemes: ["http", "https", "mailto"],
+    transformTags: {
+      // Inline styling per tag, since email clients ignore <style> blocks
+      // unpredictably — safer to style each element directly.
+      p: sanitizeHtml.simpleTransform("p", { style: "color:#333; line-height:1.6; margin:0 0 14px;" }),
+      a: sanitizeHtml.simpleTransform("a", { style: "color:#B8791F; text-decoration:underline;" }),
+      strong: sanitizeHtml.simpleTransform("strong", { style: "font-weight:700;" }),
+      ul: sanitizeHtml.simpleTransform("ul", { style: "margin:0 0 14px; padding-left:22px; color:#333;" }),
+      ol: sanitizeHtml.simpleTransform("ol", { style: "margin:0 0 14px; padding-left:22px; color:#333;" }),
+      li: sanitizeHtml.simpleTransform("li", { style: "margin-bottom:6px; line-height:1.6;" }),
+      blockquote: sanitizeHtml.simpleTransform("blockquote", {
+        style: "border-left:3px solid #E8A33D; margin:0 0 14px; padding:2px 0 2px 14px; color:#555;",
+      }),
+      code: sanitizeHtml.simpleTransform("code", {
+        style: "background:#f5f5f5; padding:2px 5px; border-radius:4px; font-family:monospace; font-size:13px;",
+      }),
+    },
+  });
+
+  const html = layout(`
+    <h2 style="margin:0 0 16px;">${escapeHtml(params.subject)}</h2>
+    ${safeHtml}
+  `);
+
+  return send({ to: { email: params.to, name: params.name }, subject: params.subject, html });
+}
+
+function escapeHtml(str: string) {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }

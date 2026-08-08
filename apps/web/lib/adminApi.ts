@@ -7,6 +7,7 @@ import type {
   Organization,
   Service,
   OrgUser,
+  Payment,
 } from "@runserver/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -39,7 +40,7 @@ export async function listOrganizations() {
 
 export async function getOrganization(orgId: string) {
   const res = await fetch(`${API_URL}/admin/orgs/${orgId}`, { headers: authHeaders() });
-  return handle<{ org: Organization & { services: Service[]; users: OrgUser[] } }>(res);
+  return handle<{ org: Organization & { services: Service[]; users: OrgUser[]; payments: Payment[] } }>(res);
 }
 
 export async function updateOrgActive(orgId: string, isActive: boolean) {
@@ -121,4 +122,38 @@ export async function updateService(orgId: string, serviceId: string, payload: U
     body: JSON.stringify(payload),
   });
   return handle<{ service: Service }>(res);
+}
+
+export async function resendInvite(orgId: string, userId: string) {
+  const res = await fetch(`${API_URL}/admin/orgs/${orgId}/users/${userId}/resend-invite`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  return handle<{ message: string }>(res);
+}
+
+export async function resendReceipt(orgId: string, paymentId: string) {
+  const res = await fetch(`${API_URL}/admin/orgs/${orgId}/payments/${paymentId}/resend-receipt`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  return handle<{ message: string }>(res);
+}
+
+export async function sendMessageToOrg(orgId: string, payload: { subject: string; body: string; recipientUserId?: string }) {
+  const res = await fetch(`${API_URL}/admin/orgs/${orgId}/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return handle<{ message: string }>(res);
+}
+
+export async function sendTestEmail(to: string) {
+  const res = await fetch(`${API_URL}/admin/test-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ to }),
+  });
+  return handle<{ message: string }>(res);
 }

@@ -2,8 +2,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOrganization, createService, updateService, updateOrgActive, updateOrgUserActive } from "../../../../lib/adminApi";
-import type { Organization, Service, OrgUser, ServiceCategory, BillingCycle } from "@runserver/types";
+import { getOrganization, createService, updateService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, sendMessageToOrg } from "../../../../lib/adminApi";
+import MarkdownComposer from "../../../../components/MarkdownComposer";
+import type { Organization, Service, OrgUser, Payment, ServiceCategory, BillingCycle } from "@runserver/types";
 
 interface Params {
   params: { orgId: string };
@@ -13,7 +14,7 @@ const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "S
 
 export default function AdminOrgDetailPage({ params }: Params) {
   const { orgId } = params;
-  const [org, setOrg] = useState<(Organization & { services: Service[]; users: OrgUser[] }) | null>(null);
+  const [org, setOrg] = useState<(Organization & { services: Service[]; users: OrgUser[]; payments: Payment[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddService, setShowAddService] = useState(false);
 
@@ -27,6 +28,11 @@ export default function AdminOrgDetailPage({ params }: Params) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const [showMessage, setShowMessage] = useState(false);
+  const [messageForm, setMessageForm] = useState({ subject: "", body: "", recipientUserId: "" });
+  const [messageSending, setMessageSending] = useState(false);
+  const [messageResult, setMessageResult] = useState("");
 
   async function refresh() {
     const data = await getOrganization(orgId);
@@ -70,6 +76,47 @@ export default function AdminOrgDetailPage({ params }: Params) {
     await refresh();
   }
 
+  async function handleResendInvite(userId: string, email: string) {
+    try {
+      const { message } = await resendInvite(orgId, userId);
+      alert(message);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  async function handleResendReceipt(paymentId: string) {
+    try {
+      const { message } = await resendReceipt(orgId, paymentId);
+      alert(message);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  async function handleSendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!messageForm.body.trim()) {
+      setMessageResult("Message body can't be empty");
+      return;
+    }
+    setMessageSending(true);
+    setMessageResult("");
+    try {
+      const { message } = await sendMessageToOrg(orgId, {
+        subject: messageForm.subject,
+        body: messageForm.body,
+        recipientUserId: messageForm.recipientUserId || undefined,
+      });
+      setMessageResult(message);
+      setMessageForm({ subject: "", body: "", recipientUserId: "" });
+    } catch (err: any) {
+      setMessageResult(err.message);
+    } finally {
+      setMessageSending(false);
+    }
+  }
+
   if (loading) return <div style={{ color: "#868D99", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Loading…</div>;
   if (!org) return <div style={{ color: "#F87171", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Organization not found.</div>;
 
@@ -105,6 +152,14 @@ export default function AdminOrgDetailPage({ params }: Params) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={badgeStyle}>{u.role}</span>
+                {u.mustChangePassword && (
+                  <button
+                    onClick={() => handleResendInvite(u.id, u.email)}
+                    style={{ ...smallBtnStyle, padding: "6px 10px", fontSize: 11.5, background: "#282D37", color: "#ECEEF2" }}
+                  >
+                    Resend invite
+                  </button>
+                )}
                 <button
                   onClick={() => toggleUserActive(u.id, u.isActive)}
                   style={{
@@ -119,6 +174,57 @@ export default function AdminOrgDetailPage({ params }: Params) {
               </div>
             </Row>
           ))}
+        </Section>
+
+        {/* Message client */}
+        <Section
+          title="Message client"
+          action={
+            <button onClick={() => setShowMessage((s) => !s)} style={smallBtnStyle}>
+              {showMessage ? "Cancel" : "+ New message"}
+            </button>
+          }
+        >
+          {showMessage && (
+            <form onSubmit={handleSendMessage} style={{ padding: 16, background: "#0F1115", borderRadius: 10, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <select
+                value={messageForm.recipientUserId}
+                onChange={(e) => setMessageForm({ ...messageForm, recipientUserId: e.target.value })}
+                style={inputStyle}
+              >
+                <option value="">All active users in this org</option>
+                {org.users.filter((u) => u.isActive).map((u) => (
+                  <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                ))}
+              </select>
+              <input
+                placeholder="Subject"
+                required
+                value={messageForm.subject}
+                onChange={(e) => setMessageForm({ ...messageForm, subject: e.target.value })}
+                style={inputStyle}
+              />
+              <MarkdownComposer
+                value={messageForm.body}
+                onChange={(body) => setMessageForm({ ...messageForm, body })}
+                placeholder="Write your message — supports **bold**, *italic*, [links](https://), and lists"
+                rows={7}
+              />
+              {messageResult && (
+                <p style={{ fontSize: 13, margin: 0, color: messageResult.toLowerCase().startsWith("sent") ? "#4ADE80" : "#F87171" }}>
+                  {messageResult}
+                </p>
+              )}
+              <button type="submit" disabled={messageSending} style={smallBtnStyle}>
+                {messageSending ? "Sending…" : "Send message"}
+              </button>
+            </form>
+          )}
+          {!showMessage && (
+            <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>
+              Send a one-off email to this client — a specific person or everyone active in the org.
+            </p>
+          )}
         </Section>
 
         {/* Services */}
@@ -168,6 +274,31 @@ export default function AdminOrgDetailPage({ params }: Params) {
                   {s.status === "ACTIVE" ? "Pause" : "Activate"}
                 </button>
               </div>
+            </Row>
+          ))}
+        </Section>
+
+        {/* Recent payments */}
+        <Section title="Recent payments">
+          {org.payments.length === 0 && <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>No payments yet.</p>}
+          {org.payments.map((p) => (
+            <Row key={p.id}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, fontFamily: "monospace" }}>
+                  {p.amount} {p.currency}
+                </div>
+                <div style={{ fontSize: 12, color: "#868D99" }}>
+                  {p.gateway} &middot; {p.status} {p.receiptNumber ? `· ${p.receiptNumber}` : ""} {p.paidAt ? `· ${new Date(p.paidAt).toLocaleDateString()}` : ""}
+                </div>
+              </div>
+              {p.status === "SUCCESS" && (
+                <button
+                  onClick={() => handleResendReceipt(p.id)}
+                  style={{ ...smallBtnStyle, padding: "6px 10px", fontSize: 11.5, background: "#282D37", color: "#ECEEF2" }}
+                >
+                  Resend receipt
+                </button>
+              )}
             </Row>
           ))}
         </Section>
