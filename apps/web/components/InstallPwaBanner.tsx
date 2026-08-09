@@ -89,22 +89,22 @@ export default function InstallPwaBanner() {
       >
         <div
           style={{
-            width: 32, height: 32, borderRadius: 8, background: "#E8A33D",
+            width: 32, height: 32, borderRadius: 8, background: "#169DE3",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 700, color: "#141414", flexShrink: 0, fontSize: 16,
+            fontWeight: 700, color: "#FFFFFF", flexShrink: 0, fontSize: 16,
           }}
         >
           R
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#ECEEF2" }}>Install RunServer</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#ECEEF2" }}>Install RunServ</div>
           <div style={{ fontSize: 11.5, color: "#868D99" }}>Quick access to your invoices, right from your home screen.</div>
         </div>
         <button
           onClick={handleInstall}
           disabled={installing}
           style={{
-            background: "#E8A33D", color: "#141414", border: "none", borderRadius: 8,
+            background: "#169DE3", color: "#FFFFFF", border: "none", borderRadius: 8,
             padding: "8px 14px", fontWeight: 600, fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap",
           }}
         >

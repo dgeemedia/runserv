@@ -14,7 +14,29 @@ import { sendPaymentReminders } from "./jobs/paymentReminders.job.js";
 
 const app = express();
 
-app.use(cors({ origin: process.env.WEB_APP_URL, credentials: true }));
+// Always allow local dev origins, regardless of what WEB_APP_URL is set
+// to — this matters right now specifically because no domain exists yet,
+// so WEB_APP_URL is a placeholder that will never match localhost, and
+// login would otherwise fail in every local/dev environment until a real
+// domain is deployed. WEB_APP_URL itself is still respected for prod.
+const allowedOrigins = [
+  process.env.WEB_APP_URL,
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // No origin header (curl, Postman, server-to-server) — allow.
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
+    credentials: true,
+  })
+);
 
 // Capture the raw body alongside JSON parsing — Paystack's webhook
 // signature is computed over the exact raw bytes, so we can't rely
@@ -43,7 +65,7 @@ app.use(orgRoutes);
 app.use(internalRoutes);
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`RunServer API listening on :${PORT}`));
+app.listen(PORT, () => console.log(`RunServ API listening on :${PORT}`));
 
 // ------------------------------------------------------------------
 // Scheduled jobs. In production on Render, these run as separate

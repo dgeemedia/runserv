@@ -114,11 +114,11 @@ export default function MarkdownComposer({ value, onChange, placeholder, rows = 
       )}
       <style>{`
         .rs-md-preview p { margin: 0 0 12px; line-height: 1.6; }
-        .rs-md-preview a { color: #B8791F; }
+        .rs-md-preview a { color: #0B6FAE; }
         .rs-md-preview ul, .rs-md-preview ol { margin: 0 0 12px; padding-left: 20px; }
         .rs-md-preview li { margin-bottom: 4px; }
         .rs-md-preview strong { font-weight: 700; }
-        .rs-md-preview blockquote { border-left: 3px solid #E8A33D; margin: 0 0 12px; padding-left: 12px; color: #555; }
+        .rs-md-preview blockquote { border-left: 3px solid #169DE3; margin: 0 0 12px; padding-left: 12px; color: #555; }
       `}</style>
     </div>
   );

@@ -3,7 +3,7 @@ import type { Metadata, Viewport } from "next";
 import InstallPwaBanner from "../components/InstallPwaBanner";
 
 export const metadata: Metadata = {
-  title: "RunServer",
+  title: "RunServ",
   description: "Pay your infrastructure invoices in one place.",
   manifest: "/manifest.json",
   icons: {
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "RunServer",
+    title: "RunServ",
   },
 };
 

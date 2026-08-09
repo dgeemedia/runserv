@@ -165,7 +165,7 @@ export default function DashboardPage({ params }: Params) {
           <button
             onClick={pay}
             disabled={paying || selected.size === 0}
-            style={{ background: "#E8A33D", color: "#141414", border: "none", borderRadius: 8, padding: "12px 20px", fontWeight: 600, cursor: "pointer" }}
+            style={{ background: "#169DE3", color: "#FFFFFF", border: "none", borderRadius: 8, padding: "12px 20px", fontWeight: 600, cursor: "pointer" }}
           >
             {paying ? "Redirecting…" : "Proceed to checkout"}
           </button>
@@ -192,8 +192,8 @@ function CurrencyToggle({ currency, onChange }: { currency: "USD" | "NGN"; onCha
           onClick={() => onChange(c)}
           style={{
             padding: "6px 14px", fontSize: 12.5, fontWeight: 600, borderRadius: 6, border: "none", cursor: "pointer",
-            background: currency === c ? "#E8A33D" : "transparent",
-            color: currency === c ? "#141414" : "#868D99",
+            background: currency === c ? "#169DE3" : "transparent",
+            color: currency === c ? "#FFFFFF" : "#868D99",
           }}
         >
           {c}
@@ -204,6 +204,6 @@ function CurrencyToggle({ currency, onChange }: { currency: "USD" | "NGN"; onCha
 }
 
 const btnStyle: React.CSSProperties = {
-  background: "#E8A33D", color: "#141414", border: "none", borderRadius: 8,
+  background: "#169DE3", color: "#FFFFFF", border: "none", borderRadius: 8,
   padding: "10px 18px", fontWeight: 600, cursor: "pointer",
 };

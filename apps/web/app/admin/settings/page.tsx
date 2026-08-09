@@ -90,7 +90,7 @@ export default function AdminFxSettingsPage() {
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "32px 20px 80px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#E8A33D", textTransform: "uppercase" }}>Admin</div>
+            <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase" }}>Admin</div>
             <h1 style={{ fontSize: 22, margin: "4px 0 0" }}>USD → NGN rate</h1>
           </div>
           <Link href="/admin/revenue" style={{ color: "#868D99", fontSize: 13, textDecoration: "none" }}>Revenue</Link>
@@ -145,7 +145,7 @@ export default function AdminFxSettingsPage() {
                 </div>
               </div>
               {previewEffective !== null && (
-                <div style={{ fontSize: 12, color: "#E8A33D", marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: "#169DE3", marginTop: 6 }}>
                   With your current {markupPct}% markup, that'd charge clients ₦{previewEffective.toLocaleString(undefined, { maximumFractionDigits: 2 })} / $1
                 </div>
               )}
@@ -221,7 +221,7 @@ const inputStyle: React.CSSProperties = {
   background: "#171A21", border: "1px solid #282D37", borderRadius: 8, color: "#ECEEF2", fontSize: 14,
 };
 const btnStyle: React.CSSProperties = {
-  marginTop: 8, padding: "12px", background: "#E8A33D", color: "#141414",
+  marginTop: 8, padding: "12px", background: "#169DE3", color: "#FFFFFF",
   border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer",
 };
 const smallBtnStyle: React.CSSProperties = {

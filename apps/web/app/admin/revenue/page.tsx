@@ -83,7 +83,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div style={{ maxWidth: 780, margin: "0 auto", padding: "32px 20px 80px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#E8A33D", textTransform: "uppercase" }}>Admin</div>
+            <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase" }}>Admin</div>
             <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>Revenue</h1>
           </div>
           <nav style={{ display: "flex", gap: 16, fontSize: 13 }}>

@@ -27,7 +27,7 @@ export default function AdminOrgsPage() {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
-            <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#E8A33D", textTransform: "uppercase" }}>Admin</div>
+            <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase" }}>Admin</div>
             <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>Client organizations</h1>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -35,7 +35,7 @@ export default function AdminOrgsPage() {
             <Link href="/admin/settings" style={{ color: "#868D99", fontSize: 13, textDecoration: "none" }}>FX settings</Link>
             <Link
               href="/admin/orgs/new"
-              style={{ background: "#E8A33D", color: "#141414", padding: "10px 16px", borderRadius: 8, fontWeight: 600, textDecoration: "none", fontSize: 14 }}
+              style={{ background: "#169DE3", color: "#FFFFFF", padding: "10px 16px", borderRadius: 8, fontWeight: 600, textDecoration: "none", fontSize: 14 }}
             >
               + New client
             </Link>

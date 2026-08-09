@@ -123,15 +123,15 @@ export default function AdminOrgDetailPage({ params }: Params) {
   return (
     <div style={{ minHeight: "100vh", background: "#0F1115", color: "#ECEEF2", fontFamily: "system-ui, sans-serif" }}>
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 80px" }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#E8A33D", textTransform: "uppercase" }}>Admin</div>
+        <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase" }}>Admin</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
           <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>{org.name}</h1>
           <button
             onClick={toggleOrgActive}
             style={{
               ...smallBtnStyle,
-              background: org.isActive ? "#282D37" : "#E8A33D",
-              color: org.isActive ? "#ECEEF2" : "#141414",
+              background: org.isActive ? "#282D37" : "#169DE3",
+              color: org.isActive ? "#ECEEF2" : "#FFFFFF",
             }}
           >
             {org.isActive ? "Deactivate client" : "Reactivate client"}
@@ -165,8 +165,8 @@ export default function AdminOrgDetailPage({ params }: Params) {
                   style={{
                     ...smallBtnStyle,
                     padding: "6px 10px", fontSize: 11.5,
-                    background: u.isActive ? "#282D37" : "#E8A33D",
-                    color: u.isActive ? "#ECEEF2" : "#141414",
+                    background: u.isActive ? "#282D37" : "#169DE3",
+                    color: u.isActive ? "#ECEEF2" : "#FFFFFF",
                   }}
                 >
                   {u.isActive ? "Deactivate" : "Reactivate"}
@@ -270,7 +270,7 @@ export default function AdminOrgDetailPage({ params }: Params) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontFamily: "monospace", fontSize: 14 }}>${Number(s.monthlyAmount).toFixed(2)}/mo</span>
-                <button onClick={() => toggleStatus(s)} style={{ ...smallBtnStyle, background: s.status === "ACTIVE" ? "#282D37" : "#E8A33D", color: s.status === "ACTIVE" ? "#ECEEF2" : "#141414" }}>
+                <button onClick={() => toggleStatus(s)} style={{ ...smallBtnStyle, background: s.status === "ACTIVE" ? "#282D37" : "#169DE3", color: s.status === "ACTIVE" ? "#ECEEF2" : "#FFFFFF" }}>
                   {s.status === "ACTIVE" ? "Pause" : "Activate"}
                 </button>
               </div>
@@ -337,6 +337,6 @@ const inputStyle: React.CSSProperties = {
 };
 
 const smallBtnStyle: React.CSSProperties = {
-  background: "#E8A33D", color: "#141414", border: "none", borderRadius: 8,
+  background: "#169DE3", color: "#FFFFFF", border: "none", borderRadius: 8,
   padding: "8px 14px", fontWeight: 600, fontSize: 13, cursor: "pointer",
 };

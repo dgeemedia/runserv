@@ -11,7 +11,7 @@ const txEmailApi = new SibApiV3Sdk.TransactionalEmailsApi();
 
 const SENDER = {
   email: process.env.BREVO_SENDER_EMAIL!,
-  name: process.env.BREVO_SENDER_NAME || "RunServer",
+  name: process.env.BREVO_SENDER_NAME || "RunServ",
 };
 
 interface SendArgs {
@@ -39,13 +39,13 @@ function layout(bodyHtml: string) {
   <div style="font-family: 'IBM Plex Sans', Arial, sans-serif; background:#f5f5f5; padding:32px 0;">
     <div style="max-width:520px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e5e5e5;">
       <div style="padding:20px 32px; border-bottom:1px solid #eee;">
-        <img src="${logoUrl}" alt="RunServer" height="24" style="height:24px; width:auto; display:block;" />
+        <img src="${logoUrl}" alt="RunServ" height="24" style="height:24px; width:auto; display:block;" />
       </div>
       <div style="padding:32px;">
         ${bodyHtml}
       </div>
       <div style="padding:20px 32px; background:#fafafa; font-size:12px; color:#999;">
-        RunServer &middot; Infrastructure billing, handled.
+        RunServ &middot; Infrastructure billing, handled.
       </div>
     </div>
   </div>`;
@@ -65,10 +65,10 @@ export async function sendInviteEmail(params: {
     <h2 style="margin:0 0 12px;">You've been added to ${params.orgName}</h2>
     <p style="color:#555; line-height:1.6;">
       You now have <strong>${params.role.toLowerCase()}</strong> access to ${params.orgName}'s
-      RunServer dashboard, where you can view and pay infrastructure invoices.
+      RunServ dashboard, where you can view and pay infrastructure invoices.
     </p>
     <a href="${params.inviteUrl}"
-       style="display:inline-block; margin-top:16px; background:#E8A33D; color:#141414;
+       style="display:inline-block; margin-top:16px; background:#169DE3; color:#FFFFFF;
               padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:600;">
       Set your password
     </a>
@@ -77,7 +77,7 @@ export async function sendInviteEmail(params: {
     </p>
   `);
 
-  return send({ to: { email: params.to, name: params.name }, subject: `You're invited to ${params.orgName} on RunServer`, html });
+  return send({ to: { email: params.to, name: params.name }, subject: `You're invited to ${params.orgName} on RunServ`, html });
 }
 
 // ------------------------------------------------------------------
@@ -117,7 +117,7 @@ export async function sendPaymentReminderEmail(params: {
     </table>
     <p style="font-size:18px; font-weight:700; margin:0 0 20px;">Total: $${params.total} USD</p>
     <a href="${params.payUrl}"
-       style="display:inline-block; background:#E8A33D; color:#141414;
+       style="display:inline-block; background:#169DE3; color:#FFFFFF;
               padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:600;">
       Pay now
     </a>
@@ -139,11 +139,11 @@ export async function sendPasswordResetEmail(params: { to: string; name?: string
   const html = layout(`
     <h2 style="margin:0 0 12px;">Reset your password</h2>
     <p style="color:#555; line-height:1.6;">
-      We got a request to reset the password on your RunServer account.
+      We got a request to reset the password on your RunServ account.
       If this wasn't you, you can safely ignore this email — your password won't change.
     </p>
     <a href="${params.resetUrl}"
-       style="display:inline-block; margin-top:16px; background:#E8A33D; color:#141414;
+       style="display:inline-block; margin-top:16px; background:#169DE3; color:#FFFFFF;
               padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:600;">
       Reset password
     </a>
@@ -152,7 +152,7 @@ export async function sendPasswordResetEmail(params: { to: string; name?: string
     </p>
   `);
 
-  return send({ to: { email: params.to, name: params.name }, subject: "Reset your RunServer password", html });
+  return send({ to: { email: params.to, name: params.name }, subject: "Reset your RunServ password", html });
 }
 
 // ------------------------------------------------------------------
@@ -201,13 +201,13 @@ export async function sendTestEmail(to: string) {
   const html = layout(`
     <h2 style="margin:0 0 12px;">Test email</h2>
     <p style="color:#555; line-height:1.6;">
-      If you're reading this, RunServer's Brevo configuration is working —
+      If you're reading this, RunServ's Brevo configuration is working —
       API key valid, sender domain verified, delivery successful.
     </p>
     <p style="color:#999; font-size:12px; margin-top:20px;">Sent from the admin panel, not triggered by any real activity.</p>
   `);
 
-  return send({ to: { email: to }, subject: "RunServer — test email", html });
+  return send({ to: { email: to }, subject: "RunServ — test email", html });
 }
 
 // ------------------------------------------------------------------
@@ -238,13 +238,13 @@ export async function sendCustomMessageEmail(params: {
       // Inline styling per tag, since email clients ignore <style> blocks
       // unpredictably — safer to style each element directly.
       p: sanitizeHtml.simpleTransform("p", { style: "color:#333; line-height:1.6; margin:0 0 14px;" }),
-      a: sanitizeHtml.simpleTransform("a", { style: "color:#B8791F; text-decoration:underline;" }),
+      a: sanitizeHtml.simpleTransform("a", { style: "color:#0B6FAE; text-decoration:underline;" }),
       strong: sanitizeHtml.simpleTransform("strong", { style: "font-weight:700;" }),
       ul: sanitizeHtml.simpleTransform("ul", { style: "margin:0 0 14px; padding-left:22px; color:#333;" }),
       ol: sanitizeHtml.simpleTransform("ol", { style: "margin:0 0 14px; padding-left:22px; color:#333;" }),
       li: sanitizeHtml.simpleTransform("li", { style: "margin-bottom:6px; line-height:1.6;" }),
       blockquote: sanitizeHtml.simpleTransform("blockquote", {
-        style: "border-left:3px solid #E8A33D; margin:0 0 14px; padding:2px 0 2px 14px; color:#555;",
+        style: "border-left:3px solid #169DE3; margin:0 0 14px; padding:2px 0 2px 14px; color:#555;",
       }),
       code: sanitizeHtml.simpleTransform("code", {
         style: "background:#f5f5f5; padding:2px 5px; border-radius:4px; font-family:monospace; font-size:13px;",

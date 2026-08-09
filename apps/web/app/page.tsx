@@ -2,9 +2,9 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "RunServer — Infrastructure billing, handled",
+  title: "RunServ — Infrastructure billing, handled",
   description:
-    "RunServer turns scattered infrastructure invoices into one dashboard. Clients see what they owe, pick what to pay, and check out in USD or NGN.",
+    "RunServ turns scattered infrastructure invoices into one dashboard. Clients see what they owe, pick what to pay, and check out in USD or NGN.",
 };
 
 export default function MarketingPage() {
@@ -17,7 +17,7 @@ export default function MarketingPage() {
         .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
         a { color: inherit; }
         .nav-link:hover { color: #ECEEF2 !important; }
-        .cta-primary:hover { background: #F2B04F !important; }
+        .cta-primary:hover { background: #3FB4F0 !important; }
         .feature-card { transition: border-color 0.15s ease; }
         .feature-card:hover { border-color: #3A404C; }
         @media (max-width: 860px) {
@@ -36,7 +36,7 @@ export default function MarketingPage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/logo/logo-mark-dark.png" alt="RunServer" style={{ height: 28, width: "auto" }} />
+          <img src="/logo/logo-mark-transparent.png" alt="RunServ" style={{ height: 28, width: "auto" }} />
           <span style={{ fontSize: 18, fontWeight: 700 }}>
             Run<span style={{ color: "#169DE3" }}>Server</span>
           </span>
@@ -57,7 +57,7 @@ export default function MarketingPage() {
             <div
               className="mono"
               style={{
-                fontSize: 12, letterSpacing: "0.08em", color: "#E8A33D",
+                fontSize: 12, letterSpacing: "0.08em", color: "#169DE3",
                 textTransform: "uppercase", marginBottom: 18,
               }}
             >
@@ -68,7 +68,7 @@ export default function MarketingPage() {
               <br />
               Pick what to pay.
               <br />
-              <span style={{ color: "#E8A33D" }}>One checkout.</span>
+              <span style={{ color: "#169DE3" }}>One checkout.</span>
             </h1>
             <p style={{ fontSize: 17, color: "#868D99", lineHeight: 1.6, maxWidth: 440, margin: "0 0 32px" }}>
               Hosting, APIs, databases — every infrastructure cost a client owes,
@@ -80,7 +80,7 @@ export default function MarketingPage() {
                 href="/login"
                 className="cta-primary"
                 style={{
-                  background: "#E8A33D", color: "#141414", padding: "13px 24px",
+                  background: "#169DE3", color: "#FFFFFF", padding: "13px 24px",
                   borderRadius: 10, fontWeight: 600, fontSize: 15, textDecoration: "none",
                 }}
               >
@@ -137,7 +137,7 @@ export default function MarketingPage() {
                 </div>
                 <div
                   style={{
-                    marginTop: 16, background: "#E8A33D", color: "#141414",
+                    marginTop: 16, background: "#169DE3", color: "#FFFFFF",
                     textAlign: "center", padding: "12px", borderRadius: 8, fontWeight: 600, fontSize: 14,
                   }}
                 >
@@ -153,7 +153,7 @@ export default function MarketingPage() {
       <section style={{ maxWidth: 1120, margin: "0 auto", padding: "80px 24px" }}>
         <h2 style={{ fontSize: 26, fontWeight: 700, marginBottom: 8 }}>Built for teams billing clients for infrastructure</h2>
         <p style={{ color: "#868D99", fontSize: 15.5, marginBottom: 40, maxWidth: 560 }}>
-          If you manage hosting, APIs, or servers on behalf of clients, RunServer
+          If you manage hosting, APIs, or servers on behalf of clients, RunServ
           replaces the spreadsheet-and-email-chain routine with something both
           sides can actually see.
         </p>
@@ -194,7 +194,7 @@ export default function MarketingPage() {
             { n: "03", title: "One checkout settles it", body: "Selected items are summed into a single payment, in whichever currency the client picks, and a receipt goes out automatically." },
           ].map((s) => (
             <div key={s.n}>
-              <div className="mono" style={{ fontSize: 13, color: "#E8A33D", marginBottom: 10 }}>{s.n}</div>
+              <div className="mono" style={{ fontSize: 13, color: "#169DE3", marginBottom: 10 }}>{s.n}</div>
               <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{s.title}</h3>
               <p style={{ fontSize: 14, color: "#868D99", lineHeight: 1.6, margin: 0 }}>{s.body}</p>
             </div>
@@ -217,7 +217,7 @@ export default function MarketingPage() {
           <Link
             href="/login"
             className="cta-primary"
-            style={{ background: "#E8A33D", color: "#141414", padding: "14px 26px", borderRadius: 10, fontWeight: 600, fontSize: 15, textDecoration: "none", whiteSpace: "nowrap" }}
+            style={{ background: "#169DE3", color: "#FFFFFF", padding: "14px 26px", borderRadius: 10, fontWeight: 600, fontSize: 15, textDecoration: "none", whiteSpace: "nowrap" }}
           >
             Client login
           </Link>
@@ -227,7 +227,7 @@ export default function MarketingPage() {
       {/* ---------------- Footer ---------------- */}
       <footer style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <img src="/logo/logo-mark-dark.png" alt="RunServer" style={{ height: 18, width: "auto", opacity: 0.8 }} />
+          <img src="/logo/logo-mark-transparent.png" alt="RunServ" style={{ height: 18, width: "auto", opacity: 0.8 }} />
           <span style={{ fontSize: 13, color: "#868D99" }}>Built and operated by Elorge Technologies Limited</span>
         </div>
         <span style={{ fontSize: 13, color: "#868D99" }}>&copy; {new Date().getFullYear()} Elorge Technologies Limited</span>

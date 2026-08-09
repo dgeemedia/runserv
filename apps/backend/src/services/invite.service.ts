@@ -9,7 +9,7 @@ import type { OrgRole } from "@runserver/types";
  * Creates a user in PENDING (mustChangePassword) state, generates a
  * one-time invite token, and emails it via Brevo. Used both when an
  * org OWNER adds a teammate (e.g. their finance person) and when a
- * RunServer admin creates a brand-new client org and needs to invite
+ * RunServ admin creates a brand-new client org and needs to invite
  * that client's first OWNER.
  */
 export async function inviteUserToOrg(params: {

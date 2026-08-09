@@ -1,6 +1,6 @@
 {
-  "name": "RunServer — Infrastructure Billing",
-  "short_name": "RunServer",
+  "name": "RunServ — Infrastructure Billing",
+  "short_name": "RunServ",
   "description": "Pay your infrastructure invoices in one place.",
   "start_url": "/",
   "display": "standalone",

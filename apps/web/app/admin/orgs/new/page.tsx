@@ -119,6 +119,6 @@ const inputStyle: React.CSSProperties = {
   background: "#171A21", border: "1px solid #282D37", borderRadius: 8, color: "#ECEEF2", fontSize: 14,
 };
 const btnStyle: React.CSSProperties = {
-  marginTop: 20, width: "100%", padding: "12px", background: "#E8A33D", color: "#141414",
+  marginTop: 20, width: "100%", padding: "12px", background: "#169DE3", color: "#FFFFFF",
   border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer",
 };

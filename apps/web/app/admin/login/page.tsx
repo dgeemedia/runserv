@@ -33,7 +33,7 @@ export default function AdminLoginPage() {
         <div style={{ marginBottom: 16 }}>
           <Logo variant="dark" height={28} />
         </div>
-        <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#E8A33D", textTransform: "uppercase", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase", marginBottom: 6 }}>
           Admin
         </div>
         <p style={{ color: "#868D99", fontSize: 13, marginBottom: 24 }}>Sign in to manage client organizations.</p>
@@ -60,6 +60,6 @@ const inputStyle: React.CSSProperties = {
 };
 
 const btnStyle: React.CSSProperties = {
-  width: "100%", padding: "12px", background: "#E8A33D", color: "#141414",
+  width: "100%", padding: "12px", background: "#169DE3", color: "#FFFFFF",
   border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer",
 };
