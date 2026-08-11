@@ -1,4 +1,3 @@
-// apps/web/app/admin/orgs/new/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -11,7 +10,7 @@ export default function NewOrgPage() {
     name: "",
     slug: "",
     yearlyDiscountPct: 15,
-    preferredGateway: "PAYSTACK" as "PAYSTACK" | "FLUTTERWAVE",
+    preferredGateway: "FLUTTERWAVE" as "PAYSTACK" | "FLUTTERWAVE",
     ownerEmail: "",
     ownerName: "",
   });
@@ -61,7 +60,7 @@ export default function NewOrgPage() {
             style={inputStyle}
           />
           <div style={{ fontSize: 11, color: "#868D99", marginTop: -10, marginBottom: 12 }}>
-            runserver.io/{form.slug || "your-client"}/dashboard
+            runserv.org/{form.slug || "your-client"}/dashboard
           </div>
 
           <label style={labelStyle}>Yearly billing discount (%)</label>
@@ -74,15 +73,18 @@ export default function NewOrgPage() {
             style={inputStyle}
           />
 
-          <label style={labelStyle}>Payment gateway</label>
+          <label style={labelStyle}>Primary payment gateway</label>
           <select
             value={form.preferredGateway}
             onChange={(e) => setForm({ ...form, preferredGateway: e.target.value as "PAYSTACK" | "FLUTTERWAVE" })}
             style={inputStyle}
           >
-            <option value="PAYSTACK">Paystack</option>
             <option value="FLUTTERWAVE">Flutterwave</option>
+            <option value="PAYSTACK">Paystack</option>
           </select>
+          <div style={{ fontSize: 11.5, color: "#868D99", marginTop: -8, marginBottom: 12 }}>
+            Tried first at checkout. If it fails, checkout automatically retries on the other gateway — no separate setup needed.
+          </div>
 
           <div style={{ height: 1, background: "#282D37", margin: "16px 0" }} />
 

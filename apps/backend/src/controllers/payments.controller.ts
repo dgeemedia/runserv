@@ -1,10 +1,10 @@
-// apps/backend/src/controllers/payments.controller.ts
 import { Response, Request } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { AuthedRequest } from "../middleware/auth.middleware.js";
 import { getGateway } from "../services/gateways/gateway.factory.js";
 import type { GatewayAdapter, VerifiedTransaction } from "../services/gateways/gateway.types.js";
+import type { PaymentGateway } from "@runserver/types";
 import { sendReceiptEmail } from "../services/email.service.js";
 import { convertUsdToNgn, getFxRate } from "../services/fx.service.js";
 
@@ -12,7 +12,10 @@ import { convertUsdToNgn, getFxRate } from "../services/fx.service.js";
 // POST /orgs/:orgId/checkout
 // Client checks boxes on the dashboard -> this creates one transaction
 // for the summed total, in whichever currency the client picked (USD
-// or NGN), on whichever gateway the org is configured for.
+// or NGN). Tries the org's preferredGateway first (Flutterwave by
+// default for new orgs); if that gateway's initialization fails for
+// any reason, automatically retries on the other gateway before
+// giving up — see the fallback logic below.
 // ------------------------------------------------------------------
 const checkoutSchema = z.object({
   paymentRequestIds: z.array(z.string()).min(1, "Select at least one item to pay"),
@@ -51,20 +54,47 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
   }
 
   const gateway = getGateway(org.preferredGateway);
+  const fallbackGatewayId: PaymentGateway = org.preferredGateway === "FLUTTERWAVE" ? "PAYSTACK" : "FLUTTERWAVE";
+  const fallbackGateway = getGateway(fallbackGatewayId);
 
-  const tx = await gateway.initializeTransaction({
+  const initParams = {
     email: req.user!.email,
     amount: chargeAmount,
     currency,
     paymentRequestIds: items.map((i) => i.id),
     orgId,
     callbackUrl: `${process.env.WEB_APP_URL}/payment-complete`,
-  });
+  };
+
+  // Try the org's preferred gateway first; if it fails for any reason
+  // (bad credentials, the gateway's API being down, a rejected currency,
+  // etc.) automatically retry on the other one before giving up. This is
+  // what makes "Flutterwave primary, Paystack fallback" (or the reverse,
+  // for an org explicitly set to Paystack) actually resilient rather than
+  // just a static preference that fails the whole checkout on a hiccup.
+  let tx: Awaited<ReturnType<GatewayAdapter["initializeTransaction"]>>;
+  let usedGateway: GatewayAdapter;
+  let fellBack = false;
+
+  try {
+    tx = await gateway.initializeTransaction(initParams);
+    usedGateway = gateway;
+  } catch (primaryErr: any) {
+    console.error(`[checkout] ${gateway.id} init failed for org ${orgId}, falling back to ${fallbackGateway.id}:`, primaryErr.message);
+    try {
+      tx = await fallbackGateway.initializeTransaction(initParams);
+      usedGateway = fallbackGateway;
+      fellBack = true;
+    } catch (fallbackErr: any) {
+      console.error(`[checkout] ${fallbackGateway.id} fallback also failed for org ${orgId}:`, fallbackErr.message);
+      return res.status(502).json({ error: "Both payment gateways are currently unavailable. Please try again shortly." });
+    }
+  }
 
   await prisma.payment.create({
     data: {
       orgId,
-      gateway: gateway.id,
+      gateway: usedGateway.id,
       gatewayRef: tx.reference,
       amount: chargeAmount,
       currency,
@@ -75,7 +105,18 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
     },
   });
 
-  return res.json({ checkoutUrl: tx.checkoutUrl, reference: tx.reference, total: chargeAmount, currency });
+  if (fellBack) {
+    await prisma.auditLog.create({
+      data: {
+        orgId,
+        userId: req.user!.id,
+        action: "payment.gateway_fallback_used",
+        metadata: { attemptedGateway: gateway.id, usedGateway: usedGateway.id, reference: tx.reference },
+      },
+    });
+  }
+
+  return res.json({ checkoutUrl: tx.checkoutUrl, reference: tx.reference, total: chargeAmount, currency, gateway: usedGateway.id });
 }
 
 // ------------------------------------------------------------------

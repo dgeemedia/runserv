@@ -1,5 +1,5 @@
 // ==========================================================
-// RunServer — Prisma schema
+// RunServ — Prisma schema
 // One org = one client company. Each org has its own users,
 // services, payment requests, and payment history.
 // ==========================================================
@@ -21,10 +21,10 @@ datasource db {
 model Organization {
   id                String         @id @default(cuid())
   name              String
-  slug              String         @unique // used in URLs: runserver.app/acme-studio
+  slug              String         @unique // used in URLs: runserv.org/acme-studio
   currency          String         @default("USD")
   yearlyDiscountPct Decimal        @default(15.0) @db.Decimal(5, 2) // % off when billed yearly
-  preferredGateway  PaymentGateway @default(PAYSTACK) // which gateway checkout uses for this org
+  preferredGateway  PaymentGateway @default(FLUTTERWAVE) // tried first at checkout; the other gateway is the automatic fallback if this one fails
   isActive          Boolean        @default(true)
   createdByAdminId  String?
   createdByAdmin    AdminUser?     @relation(fields: [createdByAdminId], references: [id])
@@ -41,7 +41,7 @@ model Organization {
 }
 
 // ----------------------------------------------------------
-// AdminUser — your (RunServer's) internal staff, distinct from
+// AdminUser — your (RunServ's) internal staff, distinct from
 // client-org users. Manages orgs, services, and pricing across
 // every client. Deliberately a separate model from `User` so a
 // bug in org-scoping logic can never accidentally grant a client

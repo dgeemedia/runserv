@@ -1,4 +1,3 @@
-// apps/backend/src/controllers/admin.orgs.controller.ts
 import { Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -47,7 +46,7 @@ const createOrgSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Slug can only contain lowercase letters, numbers, and hyphens"),
   currency: z.string().default("USD"),
   yearlyDiscountPct: z.number().min(0).max(100).default(15),
-  preferredGateway: z.enum(["PAYSTACK", "FLUTTERWAVE"]).default("PAYSTACK"),
+  preferredGateway: z.enum(["PAYSTACK", "FLUTTERWAVE"]).default("FLUTTERWAVE"),
   ownerEmail: z.string().email(),
   ownerName: z.string().optional(),
 });

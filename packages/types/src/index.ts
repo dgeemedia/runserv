@@ -1,5 +1,3 @@
-// packages/types/src/index.ts
-
 // ==========================================================
 // Shared types — mirrors apps/backend/prisma/schema.prisma enums
 // and defines the request/response shapes crossing the API
@@ -127,6 +125,7 @@ export interface CheckoutResponse {
   reference: string;
   total: number;
   currency: "USD" | "NGN";
+  gateway: PaymentGateway; // whichever gateway actually processed this — may differ from the org's preferredGateway if a fallback occurred
 }
 
 export interface ForgotPasswordRequest {
