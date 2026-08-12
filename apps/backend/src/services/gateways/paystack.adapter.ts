@@ -11,6 +11,26 @@ function headers() {
   };
 }
 
+// Minimal shapes covering only the fields this adapter actually reads
+// off Paystack's responses — enough to satisfy strict mode without
+// modeling their full API schema.
+interface PaystackInitResponse {
+  data: { authorization_url: string; reference: string };
+}
+
+interface PaystackVerifyResponse {
+  data: {
+    status: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    metadata: { orgId: string; paymentRequestIds: string[] };
+    authorization?: { last4?: string; card_type?: string };
+    paid_at: string;
+    [key: string]: unknown;
+  };
+}
+
 export const paystackAdapter: GatewayAdapter = {
   id: "PAYSTACK",
 
@@ -28,14 +48,14 @@ export const paystackAdapter: GatewayAdapter = {
     });
 
     if (!res.ok) throw new Error(`Paystack init failed: ${res.status} ${await res.text()}`);
-    const data = await res.json();
+    const data = (await res.json()) as PaystackInitResponse;
     return { checkoutUrl: data.data.authorization_url, reference: data.data.reference };
   },
 
   async verifyTransaction(reference: string): Promise<VerifiedTransaction> {
     const res = await fetch(`${BASE_URL}/transaction/verify/${reference}`, { headers: headers() });
     if (!res.ok) throw new Error(`Paystack verify failed: ${res.status} ${await res.text()}`);
-    const { data } = await res.json();
+    const { data } = (await res.json()) as PaystackVerifyResponse;
 
     return {
       status: data.status === "success" ? "success" : data.status === "abandoned" ? "pending" : "failed",

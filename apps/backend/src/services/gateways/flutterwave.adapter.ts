@@ -10,6 +10,26 @@ function headers() {
   };
 }
 
+// Minimal shapes covering only the fields this adapter actually reads
+// off Flutterwave's responses — enough to satisfy strict mode without
+// modeling their full API schema.
+interface FlutterwaveInitResponse {
+  data: { link: string };
+}
+
+interface FlutterwaveVerifyResponse {
+  data: {
+    status: string;
+    amount: number;
+    currency: string;
+    tx_ref: string;
+    meta?: { orgId?: string; paymentRequestIds?: string };
+    card?: { last_4digits?: string; type?: string };
+    created_at: string;
+    [key: string]: unknown;
+  };
+}
+
 export const flutterwaveAdapter: GatewayAdapter = {
   id: "FLUTTERWAVE",
 
@@ -32,7 +52,7 @@ export const flutterwaveAdapter: GatewayAdapter = {
     });
 
     if (!res.ok) throw new Error(`Flutterwave init failed: ${res.status} ${await res.text()}`);
-    const data = await res.json();
+    const data = (await res.json()) as FlutterwaveInitResponse;
     return { checkoutUrl: data.data.link, reference: txRef };
   },
 
@@ -41,7 +61,7 @@ export const flutterwaveAdapter: GatewayAdapter = {
       headers: headers(),
     });
     if (!res.ok) throw new Error(`Flutterwave verify failed: ${res.status} ${await res.text()}`);
-    const { data } = await res.json();
+    const { data } = (await res.json()) as FlutterwaveVerifyResponse;
 
     const paymentRequestIds: string[] = (data.meta?.paymentRequestIds ?? "")
       .split(",")
@@ -52,7 +72,7 @@ export const flutterwaveAdapter: GatewayAdapter = {
       amount: data.amount,
       currency: data.currency,
       reference: data.tx_ref,
-      orgId: data.meta?.orgId,
+      orgId: data.meta?.orgId ?? "",
       paymentRequestIds,
       cardLast4: data.card?.last_4digits,
       cardBrand: data.card?.type,

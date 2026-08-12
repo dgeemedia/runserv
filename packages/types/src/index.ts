@@ -1,3 +1,4 @@
+// packages/types/src/index.ts
 // ==========================================================
 // Shared types — mirrors apps/backend/prisma/schema.prisma enums
 // and defines the request/response shapes crossing the API

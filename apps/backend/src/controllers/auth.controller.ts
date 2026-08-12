@@ -48,8 +48,13 @@ export async function login(req: Request, res: Response) {
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
+  // process.env.JWT_EXPIRES_IN || "7d" types as plain `string`, but
+  // @types/jsonwebtoken@9's SignOptions.expiresIn wants `number |
+  // StringValue` (a template-literal type like "7d" | "12h" | ...).
+  // Cast at the call site rather than loosening the env var's type
+  // everywhere it's read.
   const token = jwt.sign({ userId: user.id, orgId: user.orgId }, process.env.JWT_SECRET!, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: (process.env.JWT_EXPIRES_IN || "7d") as jwt.SignOptions["expiresIn"],
   });
 
   return res.json({

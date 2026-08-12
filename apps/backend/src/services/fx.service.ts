@@ -114,10 +114,18 @@ export async function previewMarketRate() {
   };
 }
 
+// Shape of the fields we actually read off each provider's response.
+// Both open.er-api.com and exchangerate-api.com return a `rates` map
+// keyed by currency code — this is enough to type the `.NGN` access
+// below without needing the full response schema.
+interface RatesResponse {
+  rates?: Record<string, number>;
+}
+
 async function fetchLiveMarketRate(): Promise<{ source: string; value: number }> {
   const res = await fetch("https://open.er-api.com/v6/latest/USD");
   if (!res.ok) throw new Error("open.er-api.com unreachable");
-  const data = await res.json();
+  const data = (await res.json()) as RatesResponse;
   const rate = data?.rates?.NGN;
   if (!rate) throw new Error("open.er-api.com did not return an NGN rate");
   return { source: "open.er-api.com", value: rate };
@@ -126,7 +134,7 @@ async function fetchLiveMarketRate(): Promise<{ source: string; value: number }>
 async function fetchLiveMarketRateFallback(): Promise<{ source: string; value: number }> {
   const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
   if (!res.ok) throw new Error("exchangerate-api.com unreachable");
-  const data = await res.json();
+  const data = (await res.json()) as RatesResponse;
   const rate = data?.rates?.NGN;
   if (!rate) throw new Error("exchangerate-api.com did not return an NGN rate");
   return { source: "exchangerate-api.com", value: rate };

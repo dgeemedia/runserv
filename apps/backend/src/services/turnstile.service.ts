@@ -11,7 +11,7 @@ export async function verifyTurnstile(token: string | undefined, remoteIp?: stri
         remoteip: remoteIp,
       }),
     });
-    const data = await res.json();
+    const data = (await res.json()) as { success: boolean };
     return data.success === true;
   } catch {
     return false; // fail closed

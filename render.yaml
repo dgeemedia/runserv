@@ -12,7 +12,7 @@
 # ------------------------------------------------------------------
 services:
   - type: web
-    name: runserver-api
+    name: runserv-api
     runtime: node
     region: oregon # change to whatever's closest to your users/Supabase project
     plan: free
@@ -47,7 +47,7 @@ services:
       - key: BREVO_SENDER_EMAIL
         sync: false
       - key: BREVO_SENDER_NAME
-        value: RunServer
+        value: RunServ
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: PAYSTACK_PUBLIC_KEY
