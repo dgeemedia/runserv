@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { AdminRequest } from "../middleware/admin.middleware.js";
 import { sendInviteEmail, sendReceiptEmail, sendTestEmail, sendCustomMessageEmail } from "../services/email.service.js";
+import { canonicalAppUrl } from "../lib/env.js";
 
 // ------------------------------------------------------------------
 // POST /admin/orgs/:orgId/users/:userId/resend-invite
@@ -40,7 +41,10 @@ export async function resendInvite(req: AdminRequest, res: Response) {
     },
   });
 
-  const inviteUrl = `${process.env.WEB_APP_URL}/accept-invite?token=${rawToken}`;
+  // canonicalAppUrl(), not raw WEB_APP_URL — WEB_APP_URL may now be a
+  // comma-separated CORS allowlist (apex + www), and interpolating it
+  // directly here would produce a broken multi-origin link.
+  const inviteUrl = `${canonicalAppUrl()}/accept-invite?token=${rawToken}`;
   await sendInviteEmail({ to: user.email, name: user.name ?? undefined, orgName: user.org.name, inviteUrl, role: user.role });
 
   await prisma.auditLog.create({

@@ -1,6 +1,8 @@
+// apps/backend/src/services/email.service.ts
 import SibApiV3Sdk from "sib-api-v3-sdk";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
+import { canonicalAppUrl } from "../lib/env.js";
 
 const client = SibApiV3Sdk.ApiClient.instance;
 const apiKey = client.authentications["api-key"];
@@ -33,7 +35,10 @@ async function send({ to, subject, html }: SendArgs) {
 // "ledger" tone rather than a marketing template.
 // ------------------------------------------------------------------
 function layout(bodyHtml: string) {
-  const logoUrl = `${process.env.WEB_APP_URL}/logo/logo-mark-light.png`;
+  // canonicalAppUrl(), not raw WEB_APP_URL — WEB_APP_URL may now be a
+  // comma-separated CORS allowlist (e.g. apex + www), and interpolating
+  // it directly here would produce a broken multi-origin image src.
+  const logoUrl = `${canonicalAppUrl()}/logo/logo-mark-light.png`;
   return `
   <div style="font-family: 'IBM Plex Sans', Arial, sans-serif; background:#f5f5f5; padding:32px 0;">
     <div style="max-width:520px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e5e5e5;">

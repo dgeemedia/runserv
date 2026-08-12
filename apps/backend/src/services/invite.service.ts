@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { sendInviteEmail } from "./email.service.js";
+import { canonicalAppUrl } from "../lib/env.js";
 import type { OrgRole } from "@runserver/types";
 
 /**
@@ -47,7 +48,11 @@ export async function inviteUserToOrg(params: {
     },
   });
 
-  const inviteUrl = `${process.env.WEB_APP_URL}/accept-invite?token=${rawToken}`;
+  // canonicalAppUrl(), not raw WEB_APP_URL — WEB_APP_URL may now be a
+  // comma-separated CORS allowlist (apex + www), and interpolating it
+  // directly here would produce a broken multi-origin link like
+  // "https://runserv.org,https://www.runserv.org/accept-invite?token=...".
+  const inviteUrl = `${canonicalAppUrl()}/accept-invite?token=${rawToken}`;
 
   await sendInviteEmail({ to: user.email, name: user.name ?? undefined, orgName: params.orgName, inviteUrl, role: params.role });
 
