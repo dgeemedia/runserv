@@ -1,11 +1,19 @@
 // apps/web/app/reset-password/page.tsx
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "../../lib/api";
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<PageShell><p style={{ color: "#868D99", fontSize: 13 }}>Loading…</p></PageShell>}>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get("token") ?? "";
@@ -42,31 +50,39 @@ export default function ResetPasswordPage() {
   }
 
   return (
+    <PageShell>
+      {done ? (
+        <>
+          <h1 style={{ fontSize: 18, marginBottom: 8 }}>Password reset</h1>
+          <p style={{ color: "#868D99", fontSize: 13 }}>Redirecting you to sign in…</p>
+        </>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <h1 style={{ fontSize: 18, marginBottom: 4 }}>Set a new password</h1>
+          <p style={{ color: "#868D99", fontSize: 13, marginBottom: 20 }}>Choose something you haven't used before.</p>
+
+          <label style={{ fontSize: 12, color: "#868D99" }}>New password</label>
+          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} style={inputStyle} />
+
+          <label style={{ fontSize: 12, color: "#868D99" }}>Confirm password</label>
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} />
+
+          {error && <p style={{ color: "#F87171", fontSize: 13, marginTop: -8, marginBottom: 12 }}>{error}</p>}
+
+          <button type="submit" disabled={loading} style={btnStyle}>
+            {loading ? "Saving…" : "Reset password"}
+          </button>
+        </form>
+      )}
+    </PageShell>
+  );
+}
+
+function PageShell({ children }: { children: React.ReactNode }) {
+  return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#ECEEF2", fontFamily: "system-ui, sans-serif", background: "#0F1115" }}>
       <div style={{ width: 320, padding: 32, background: "#171A21", border: "1px solid #282D37", borderRadius: 16 }}>
-        {done ? (
-          <>
-            <h1 style={{ fontSize: 18, marginBottom: 8 }}>Password reset</h1>
-            <p style={{ color: "#868D99", fontSize: 13 }}>Redirecting you to sign in…</p>
-          </>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <h1 style={{ fontSize: 18, marginBottom: 4 }}>Set a new password</h1>
-            <p style={{ color: "#868D99", fontSize: 13, marginBottom: 20 }}>Choose something you haven't used before.</p>
-
-            <label style={{ fontSize: 12, color: "#868D99" }}>New password</label>
-            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} style={inputStyle} />
-
-            <label style={{ fontSize: 12, color: "#868D99" }}>Confirm password</label>
-            <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} />
-
-            {error && <p style={{ color: "#F87171", fontSize: 13, marginTop: -8, marginBottom: 12 }}>{error}</p>}
-
-            <button type="submit" disabled={loading} style={btnStyle}>
-              {loading ? "Saving…" : "Reset password"}
-            </button>
-          </form>
-        )}
+        {children}
       </div>
     </div>
   );
