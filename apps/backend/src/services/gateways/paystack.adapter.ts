@@ -60,7 +60,7 @@ export const paystackAdapter: GatewayAdapter = {
     return {
       status: data.status === "success" ? "success" : data.status === "abandoned" ? "pending" : "failed",
       amount: data.amount / 100,
-      currency: data.currency,
+      currency: data.currency as "USD" | "NGN",
       reference: data.reference,
       orgId: data.metadata.orgId,
       paymentRequestIds: data.metadata.paymentRequestIds,

@@ -70,7 +70,7 @@ export const flutterwaveAdapter: GatewayAdapter = {
     return {
       status: data.status === "successful" ? "success" : data.status === "pending" ? "pending" : "failed",
       amount: data.amount,
-      currency: data.currency,
+      currency: data.currency as "USD" | "NGN",
       reference: data.tx_ref,
       orgId: data.meta?.orgId ?? "",
       paymentRequestIds,
