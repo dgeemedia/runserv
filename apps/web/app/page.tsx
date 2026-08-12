@@ -1,4 +1,3 @@
-// apps/web/app/page.tsx
 import Link from "next/link";
 
 export const metadata = {
@@ -38,7 +37,7 @@ export default function MarketingPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <img src="/logo/logo-mark-transparent.png" alt="RunServ" style={{ height: 28, width: "auto" }} />
           <span style={{ fontSize: 18, fontWeight: 700 }}>
-            Run<span style={{ color: "#169DE3" }}>Server</span>
+            Run<span style={{ color: "#169DE3" }}>Serv</span>
           </span>
         </div>
         <Link
@@ -225,12 +224,42 @@ export default function MarketingPage() {
       </section>
 
       {/* ---------------- Footer ---------------- */}
-      <footer style={{ maxWidth: 1120, margin: "0 auto", padding: "32px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <img src="/logo/logo-mark-transparent.png" alt="RunServ" style={{ height: 18, width: "auto", opacity: 0.8 }} />
-          <span style={{ fontSize: 13, color: "#868D99" }}>Built and operated by Elorge Technologies Limited</span>
+      <footer style={{ maxWidth: 1120, margin: "0 auto", padding: "40px 24px 32px", borderTop: "1px solid #282D37" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 32, flexWrap: "wrap", marginBottom: 24 }}>
+          <div style={{ maxWidth: 360 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <img src="/logo/logo-mark-transparent.png" alt="RunServ" style={{ height: 20, width: "auto" }} />
+            </div>
+            <p style={{ fontSize: 13, color: "#868D99", lineHeight: 1.6, margin: 0 }}>
+              RunServ is Elorge Technologies Limited's partner in service — the
+              billing layer running behind everything we build.
+            </p>
+          </div>
+
+          <div style={{ fontSize: 13, color: "#868D99", lineHeight: 1.7 }}>
+            <div style={{ fontSize: 11, letterSpacing: "0.06em", color: "#868D99", textTransform: "uppercase", marginBottom: 6, opacity: 0.8 }}>
+              Elorge Technologies Limited
+            </div>
+            <div>52 Millbrook Road, Edmonton</div>
+            <div>London, N9 7HX</div>
+            <a href="tel:+442035904976" style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
+              +44 203 590 4976
+            </a>
+            <a href="mailto:support@runserv.org" style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
+              support@runserv.org
+            </a>
+          </div>
         </div>
-        <span style={{ fontSize: 13, color: "#868D99" }}>&copy; {new Date().getFullYear()} Elorge Technologies Limited</span>
+
+        <div style={{ borderTop: "1px solid #282D37", paddingTop: 16, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontSize: 12.5, color: "#868D99" }}>&copy; {new Date().getFullYear()} Elorge Technologies Limited</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontSize: 12.5, color: "#868D99" }}>RunServ &middot; Infrastructure billing, handled.</span>
+            <Link href="/admin/login" style={{ fontSize: 11.5, color: "#565C68", textDecoration: "none" }}>
+              Admin
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

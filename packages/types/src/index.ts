@@ -17,6 +17,10 @@ export type ServiceCategory =
   | "DOMAIN"
   | "SECURITY"
   | "STORAGE"
+  | "SOFTWARE"
+  | "DEVELOPMENT"
+  | "MAINTENANCE"
+  | "CONSULTING"
   | "OTHER";
 
 export type ServiceStatus = "ACTIVE" | "PAUSED" | "CANCELLED";

@@ -119,7 +119,7 @@ export async function updateOrganization(req: AdminRequest, res: Response) {
 // ------------------------------------------------------------------
 const createServiceSchema = z.object({
   name: z.string().min(1),
-  category: z.enum(["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "OTHER"]).default("OTHER"),
+  category: z.enum(["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "SOFTWARE", "DEVELOPMENT", "MAINTENANCE", "CONSULTING", "OTHER"]).default("OTHER"),
   description: z.string().optional(),
   monthlyAmount: z.number().positive(),
   billingCycle: z.enum(["MONTHLY", "YEARLY"]).default("MONTHLY"),
@@ -159,7 +159,7 @@ export async function createService(req: AdminRequest, res: Response) {
 // ------------------------------------------------------------------
 const updateServiceSchema = z.object({
   name: z.string().min(1).optional(),
-  category: z.enum(["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "OTHER"]).optional(),
+  category: z.enum(["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "SOFTWARE", "DEVELOPMENT", "MAINTENANCE", "CONSULTING", "OTHER"]).optional(),
   description: z.string().optional(),
   monthlyAmount: z.number().positive().optional(),
   billingCycle: z.enum(["MONTHLY", "YEARLY"]).optional(),

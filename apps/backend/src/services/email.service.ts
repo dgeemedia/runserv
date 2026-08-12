@@ -1,4 +1,3 @@
-// apps/backend/src/services/email.service.ts
 import SibApiV3Sdk from "sib-api-v3-sdk";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
@@ -45,7 +44,8 @@ function layout(bodyHtml: string) {
         ${bodyHtml}
       </div>
       <div style="padding:20px 32px; background:#fafafa; font-size:12px; color:#999;">
-        RunServ &middot; Infrastructure billing, handled.
+        RunServ &middot; Infrastructure billing, handled.<br/>
+        Questions? <a href="mailto:support@runserv.org" style="color:#999;">support@runserv.org</a>
       </div>
     </div>
   </div>`;

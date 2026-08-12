@@ -1,4 +1,3 @@
-// apps/web/app/admin/orgs/[orgId]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,7 +9,7 @@ interface Params {
   params: { orgId: string };
 }
 
-const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "OTHER"];
+const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "SECURITY", "STORAGE", "SOFTWARE", "DEVELOPMENT", "MAINTENANCE", "CONSULTING", "OTHER"];
 
 export default function AdminOrgDetailPage({ params }: Params) {
   const { orgId } = params;
