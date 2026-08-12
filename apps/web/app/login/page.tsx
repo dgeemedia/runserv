@@ -1,12 +1,12 @@
 // apps/web/app/login/page.tsx
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { login } from "../../lib/api";
 import Logo from "../../components/Logo";
-import Turnstile from "../../components/Turnstile";
+// import Turnstile from "../../components/Turnstile"; // disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,22 +14,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState("");
-
-  const handleCaptcha = useCallback((token: string) => setCaptchaToken(token), []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-
-    if (!captchaToken) {
-      setError("Please complete the verification check");
-      return;
-    }
-
     setLoading(true);
     try {
-      const data = await login(email, password, captchaToken);
+      const data = await login(email, password);
       if (data.mustChangePassword) {
         router.push("/change-password");
       } else {
@@ -68,11 +59,11 @@ export default function LoginPage() {
           style={inputStyle}
         />
 
-        <Turnstile onVerify={handleCaptcha} />
+        {/* <Turnstile onVerify={handleCaptcha} /> */}
 
         {error && <p style={{ color: "#F87171", fontSize: 13, marginTop: 4, marginBottom: 12 }}>{error}</p>}
 
-        <button type="submit" disabled={loading || !captchaToken} style={btnStyle}>
+        <button type="submit" disabled={loading} style={btnStyle}>
           {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>

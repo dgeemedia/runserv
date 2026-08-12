@@ -7,7 +7,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { inviteUserToOrg } from "../services/invite.service.js";
 import { sendPasswordResetEmail } from "../services/email.service.js";
-import { verifyTurnstile } from "../services/turnstile.service.js";
+// import { verifyTurnstile } from "../services/turnstile.service.js"; // disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup
 import { AuthedRequest } from "../middleware/auth.middleware.js";
 
 // ------------------------------------------------------------------
@@ -18,18 +18,19 @@ import { AuthedRequest } from "../middleware/auth.middleware.js";
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
-  turnstileToken: z.string(),
+  turnstileToken: z.string().optional(), // Turnstile disabled
 });
 
 export async function login(req: Request, res: Response) {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid email or password format" });
 
-  const { email, password, turnstileToken } = parsed.data;
+  const { email, password } = parsed.data;
 
-  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
-    return res.status(400).json({ error: "Verification failed. Please try again." });
-  }
+  // Turnstile temporarily disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup.
+  // if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+  //   return res.status(400).json({ error: "Verification failed. Please try again." });
+  // }
 
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
@@ -143,18 +144,19 @@ export async function inviteUser(req: AuthedRequest, res: Response) {
 // ------------------------------------------------------------------
 const forgotPasswordSchema = z.object({
   email: z.string().email(),
-  turnstileToken: z.string(),
+  turnstileToken: z.string().optional(), // Turnstile disabled
 });
 
 export async function forgotPassword(req: Request, res: Response) {
   const parsed = forgotPasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid email format" });
 
-  const { email, turnstileToken } = parsed.data;
+  const { email } = parsed.data;
 
-  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
-    return res.status(400).json({ error: "Verification failed. Please try again." });
-  }
+  // Turnstile temporarily disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup.
+  // if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+  //   return res.status(400).json({ error: "Verification failed. Please try again." });
+  // }
 
   const genericResponse = { message: "If an account exists for that email, a reset link has been sent." };
 
@@ -185,18 +187,19 @@ export async function forgotPassword(req: Request, res: Response) {
 const resetPasswordSchema = z.object({
   token: z.string(),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
-  turnstileToken: z.string(),
+  turnstileToken: z.string().optional(), // Turnstile disabled
 });
 
 export async function resetPassword(req: Request, res: Response) {
   const parsed = resetPasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
-  const { token, newPassword, turnstileToken } = parsed.data;
+  const { token, newPassword } = parsed.data;
 
-  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
-    return res.status(400).json({ error: "Verification failed. Please try again." });
-  }
+  // Turnstile temporarily disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup.
+  // if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+  //   return res.status(400).json({ error: "Verification failed. Please try again." });
+  // }
 
   const resetToken = await prisma.inviteToken.findUnique({ where: { token } });
 

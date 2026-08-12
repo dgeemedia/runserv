@@ -1,10 +1,10 @@
 // apps/web/app/reset-password/page.tsx
 "use client";
 
-import { Suspense, useState, useCallback } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { resetPassword } from "../../lib/api";
-import Turnstile from "../../components/Turnstile";
+// import Turnstile from "../../components/Turnstile"; // disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup
 
 export default function ResetPasswordPage() {
   return (
@@ -24,9 +24,6 @@ function ResetPasswordForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState("");
-
-  const handleCaptcha = useCallback((token: string) => setCaptchaToken(token), []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,14 +37,10 @@ function ResetPasswordForm() {
       setError("This reset link is missing its token — use the link from your email");
       return;
     }
-    if (!captchaToken) {
-      setError("Please complete the verification check");
-      return;
-    }
 
     setLoading(true);
     try {
-      await resetPassword(token, newPassword, captchaToken);
+      await resetPassword(token, newPassword);
       setDone(true);
       setTimeout(() => router.push("/login"), 1800);
     } catch (err: any) {
@@ -75,11 +68,11 @@ function ResetPasswordForm() {
           <label style={{ fontSize: 12, color: "#868D99" }}>Confirm password</label>
           <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} style={inputStyle} />
 
-          <Turnstile onVerify={handleCaptcha} />
+          {/* <Turnstile onVerify={handleCaptcha} /> */}
 
           {error && <p style={{ color: "#F87171", fontSize: 13, marginBottom: 12 }}>{error}</p>}
 
-          <button type="submit" disabled={loading || !captchaToken} style={btnStyle}>
+          <button type="submit" disabled={loading} style={btnStyle}>
             {loading ? "Saving…" : "Reset password"}
           </button>
         </form>
