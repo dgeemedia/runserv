@@ -7,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { inviteUserToOrg } from "../services/invite.service.js";
 import { sendPasswordResetEmail } from "../services/email.service.js";
+import { verifyTurnstile } from "../services/turnstile.service.js";
 import { AuthedRequest } from "../middleware/auth.middleware.js";
 
 // ------------------------------------------------------------------
@@ -17,13 +18,18 @@ import { AuthedRequest } from "../middleware/auth.middleware.js";
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  turnstileToken: z.string(),
 });
 
 export async function login(req: Request, res: Response) {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid email or password format" });
 
-  const { email, password } = parsed.data;
+  const { email, password, turnstileToken } = parsed.data;
+
+  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+    return res.status(400).json({ error: "Verification failed. Please try again." });
+  }
 
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
@@ -56,7 +62,10 @@ export async function login(req: Request, res: Response) {
 
 // ------------------------------------------------------------------
 // POST /auth/accept-invite
-// Consumes a one-time invite token, sets the real password.
+// Consumes a one-time invite token, sets the real password. No
+// Turnstile check here — the token already came from an email we
+// sent, so this endpoint isn't reachable by an anonymous bot the way
+// login/forgot/reset are.
 // ------------------------------------------------------------------
 const acceptInviteSchema = z.object({
   token: z.string(),
@@ -127,15 +136,24 @@ export async function inviteUser(req: AuthedRequest, res: Response) {
 // Always returns a generic success message regardless of whether the
 // email exists, so this endpoint can't be used to enumerate accounts.
 // ------------------------------------------------------------------
-const forgotPasswordSchema = z.object({ email: z.string().email() });
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+  turnstileToken: z.string(),
+});
 
 export async function forgotPassword(req: Request, res: Response) {
   const parsed = forgotPasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid email format" });
 
+  const { email, turnstileToken } = parsed.data;
+
+  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+    return res.status(400).json({ error: "Verification failed. Please try again." });
+  }
+
   const genericResponse = { message: "If an account exists for that email, a reset link has been sent." };
 
-  const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (!user || !user.isActive) return res.json(genericResponse); // don't leak existence
 
   const rawToken = crypto.randomBytes(32).toString("hex");
@@ -162,13 +180,18 @@ export async function forgotPassword(req: Request, res: Response) {
 const resetPasswordSchema = z.object({
   token: z.string(),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  turnstileToken: z.string(),
 });
 
 export async function resetPassword(req: Request, res: Response) {
   const parsed = resetPasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
-  const { token, newPassword } = parsed.data;
+  const { token, newPassword, turnstileToken } = parsed.data;
+
+  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+    return res.status(400).json({ error: "Verification failed. Please try again." });
+  }
 
   const resetToken = await prisma.inviteToken.findUnique({ where: { token } });
 

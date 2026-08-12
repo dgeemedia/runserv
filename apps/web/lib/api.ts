@@ -6,11 +6,11 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function login(email: string, password: string) {
+export async function login(email: string, password: string, turnstileToken: string) {
   const res = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, turnstileToken }),
   });
   if (!res.ok) throw new Error((await res.json()).error || "Login failed");
   const data = await res.json();
@@ -31,21 +31,21 @@ export async function acceptInvite(token: string, newPassword: string) {
   return res.json();
 }
 
-export async function forgotPassword(email: string) {
+export async function forgotPassword(email: string, turnstileToken: string) {
   const res = await fetch(`${API_URL}/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, turnstileToken }),
   });
   if (!res.ok) throw new Error((await res.json()).error || "Something went wrong");
   return res.json();
 }
 
-export async function resetPassword(token: string, newPassword: string) {
+export async function resetPassword(token: string, newPassword: string, turnstileToken: string) {
   const res = await fetch(`${API_URL}/auth/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, newPassword }),
+    body: JSON.stringify({ token, newPassword, turnstileToken }),
   });
   if (!res.ok) throw new Error((await res.json()).error || "Could not reset password");
   return res.json();

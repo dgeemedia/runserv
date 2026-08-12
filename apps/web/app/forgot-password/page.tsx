@@ -1,22 +1,32 @@
 // apps/web/app/forgot-password/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { forgotPassword } from "../../lib/api";
+import Turnstile from "../../components/Turnstile";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+
+  const handleCaptcha = useCallback((token: string) => setCaptchaToken(token), []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!captchaToken) {
+      setError("Please complete the verification check");
+      return;
+    }
+
     setLoading(true);
     try {
-      await forgotPassword(email);
+      await forgotPassword(email, captchaToken);
       setSent(true); // always shows success, even if the email doesn't exist
     } catch (err: any) {
       setError(err.message);
@@ -46,9 +56,11 @@ export default function ForgotPasswordPage() {
             <label style={{ fontSize: 12, color: "#868D99" }}>Email</label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
 
-            {error && <p style={{ color: "#F87171", fontSize: 13, marginTop: 4 }}>{error}</p>}
+            <Turnstile onVerify={handleCaptcha} />
 
-            <button type="submit" disabled={loading} style={btnStyle}>
+            {error && <p style={{ color: "#F87171", fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+            <button type="submit" disabled={loading || !captchaToken} style={btnStyle}>
               {loading ? "Sending…" : "Send reset link"}
             </button>
           </form>
