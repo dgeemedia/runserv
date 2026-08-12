@@ -15,12 +15,15 @@ import { sendPaymentReminders } from "./jobs/paymentReminders.job.js";
 const app = express();
 
 // Always allow local dev origins, regardless of what WEB_APP_URL is set
-// to — this matters right now specifically because no domain exists yet,
-// so WEB_APP_URL is a placeholder that will never match localhost, and
-// login would otherwise fail in every local/dev environment until a real
-// domain is deployed. WEB_APP_URL itself is still respected for prod.
+// to — this matters for local/dev environments so login doesn't break
+// there. WEB_APP_URL itself is still respected for prod.
+//
+// WEB_APP_URL supports a comma-separated list (e.g.
+// "https://runserv.org,https://www.runserv.org") since CORS origin
+// matching is an exact string match — the apex and www are different
+// origins and both need to be listed if both are served to users.
 const allowedOrigins = [
-  process.env.WEB_APP_URL,
+  ...(process.env.WEB_APP_URL?.split(",").map((s) => s.trim()).filter(Boolean) ?? []),
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ].filter(Boolean);
