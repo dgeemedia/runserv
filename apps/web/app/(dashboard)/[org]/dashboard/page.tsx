@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { getPaymentRequests, createCheckout, getFxRate, resolveOrg, OrgAccessError } from "../../../../lib/api";
 import Logo from "../../../../components/Logo";
 import LoadingScreen from "../../../../components/LoadingScreen";
+import UserMenu from "../../../../components/UserMenu";
 
 interface Params {
   params: { org: string };
@@ -133,7 +134,10 @@ export default function DashboardPage({ params }: Params) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <Logo variant="dark" height={22} />
-          <CurrencyToggle currency={currency} onChange={setCurrency} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <CurrencyToggle currency={currency} onChange={setCurrency} />
+            <UserMenu orgName={org?.name} />
+          </div>
         </div>
 
         <div style={{ marginBottom: 24 }}>

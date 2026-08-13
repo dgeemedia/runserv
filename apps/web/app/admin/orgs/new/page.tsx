@@ -3,7 +3,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createOrganization } from "../../../../lib/adminApi";
+import AdminNav from "../../../../components/AdminNav";
 
 export default function NewOrgPage() {
   const router = useRouter();
@@ -38,13 +40,15 @@ export default function NewOrgPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0F1115", color: "#ECEEF2", fontFamily: "system-ui, sans-serif" }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 20px" }}>
-        <h1 style={{ fontSize: 22, marginBottom: 4 }}>New client</h1>
+      <AdminNav />
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "28px 20px 80px" }}>
+        <Link href="/admin/orgs" style={backLinkStyle}>← Clients</Link>
+        <h1 style={{ fontSize: 22, margin: "10px 0 4px", fontWeight: 700 }}>New client</h1>
         <p style={{ color: "#868D99", fontSize: 13, marginBottom: 24 }}>
           Creates the organization and sends an invite email to their first owner.
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 4, background: "#171A21", border: "1px solid #282D37", borderRadius: 14, padding: 20 }}>
           <label style={labelStyle}>Company name</label>
           <input
             required
@@ -116,10 +120,11 @@ export default function NewOrgPage() {
   );
 }
 
+const backLinkStyle: React.CSSProperties = { color: "#868D99", fontSize: 13, textDecoration: "none" };
 const labelStyle: React.CSSProperties = { fontSize: 12, color: "#868D99", marginTop: 8 };
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "10px 12px", marginTop: 6, marginBottom: 4,
-  background: "#171A21", border: "1px solid #282D37", borderRadius: 8, color: "#ECEEF2", fontSize: 14,
+  background: "#0F1115", border: "1px solid #282D37", borderRadius: 8, color: "#ECEEF2", fontSize: 14,
 };
 const btnStyle: React.CSSProperties = {
   marginTop: 20, width: "100%", padding: "12px", background: "#169DE3", color: "#FFFFFF",

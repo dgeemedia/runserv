@@ -252,9 +252,6 @@ export default function MarketingPage() {
           <span style={{ fontSize: 12.5, color: "#868D99" }}>&copy; {new Date().getFullYear()} RunServ</span>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <span style={{ fontSize: 12.5, color: "#868D99" }}>RunServ &middot; Infrastructure billing, handled.</span>
-            <Link href="/admin/login" style={{ fontSize: 11.5, color: "#565C68", textDecoration: "none" }}>
-              Admin
-            </Link>
           </div>
         </div>
       </footer>
