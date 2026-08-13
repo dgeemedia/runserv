@@ -1,3 +1,4 @@
+// apps/backend/src/controllers/admin.orgs.controller.ts
 import { Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
@@ -35,8 +36,6 @@ export async function getOrganization(req: AdminRequest, res: Response) {
 
 // ------------------------------------------------------------------
 // POST /admin/orgs
-// Creates the org and invites its first OWNER in one step — this is
-// the entry point for onboarding a new client.
 // ------------------------------------------------------------------
 const createOrgSchema = z.object({
   name: z.string().min(2),
@@ -79,8 +78,6 @@ export async function createOrganization(req: AdminRequest, res: Response) {
 
     return res.status(201).json({ org, owner: { id: owner.id, email: owner.email } });
   } catch (err: any) {
-    // Org was created but the owner invite failed (e.g. email already in
-    // use elsewhere) — surface that clearly rather than leaving it silent.
     return res.status(err.statusCode ?? 500).json({
       error: `Organization created, but invite failed: ${err.message}`,
       org,
@@ -90,7 +87,6 @@ export async function createOrganization(req: AdminRequest, res: Response) {
 
 // ------------------------------------------------------------------
 // PATCH /admin/orgs/:orgId
-// Adjust pricing-level org settings: discount %, preferred gateway, active status
 // ------------------------------------------------------------------
 const updateOrgSchema = z.object({
   name: z.string().min(2).optional(),
@@ -113,9 +109,36 @@ export async function updateOrganization(req: AdminRequest, res: Response) {
 }
 
 // ------------------------------------------------------------------
+// Shared helper: builds the same shape of PaymentRequest the cron
+// job (generatePaymentRequests) would eventually create for a
+// service's current billing period. Called both here (so a newly
+// added service is visible to the client immediately, without
+// waiting on the next cron run) and by the cron job itself.
+// ------------------------------------------------------------------
+function periodLabelFor(dueDate: Date, billingCycle: "MONTHLY" | "YEARLY") {
+  if (billingCycle === "YEARLY") {
+    return `${dueDate.getFullYear()} (Annual)`;
+  }
+  return dueDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function statusFor(dueDate: Date) {
+  const now = new Date();
+  if (dueDate < now) return "OVERDUE" as const;
+  const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  if (dueDate <= sevenDaysOut) return "DUE" as const;
+  return "UPCOMING" as const;
+}
+
+// ------------------------------------------------------------------
 // POST /admin/orgs/:orgId/services
 // Add a billable service to a client org — this is what shows up as
 // a checkbox line item on their dashboard once it comes due.
+//
+// Immediately creates the first PaymentRequest for it too, rather
+// than waiting for the next scheduled generatePaymentRequests cron
+// run — otherwise a client sees $0.00/no items until that job next
+// fires, which for a brand-new service could be up to a day away.
 // ------------------------------------------------------------------
 const createServiceSchema = z.object({
   name: z.string().min(1),
@@ -134,6 +157,18 @@ export async function createService(req: AdminRequest, res: Response) {
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
   if (!org) return res.status(404).json({ error: "Organization not found" });
 
+  const nextDueDate = new Date(parsed.data.nextDueDate);
+
+  // Yearly billing is priced off monthlyAmount * 12 minus the org's
+  // yearly discount, matching how the yearly total is presumably
+  // computed elsewhere (checkout/job) — kept here so the very first
+  // payment request an org sees isn't priced differently from the
+  // ones the cron job would generate for subsequent periods.
+  const amount =
+    parsed.data.billingCycle === "YEARLY"
+      ? parsed.data.monthlyAmount * 12 * (1 - Number(org.yearlyDiscountPct) / 100)
+      : parsed.data.monthlyAmount;
+
   const service = await prisma.service.create({
     data: {
       orgId,
@@ -142,20 +177,36 @@ export async function createService(req: AdminRequest, res: Response) {
       description: parsed.data.description,
       monthlyAmount: parsed.data.monthlyAmount,
       billingCycle: parsed.data.billingCycle,
-      nextDueDate: new Date(parsed.data.nextDueDate),
+      nextDueDate,
+    },
+  });
+
+  const paymentRequest = await prisma.paymentRequest.create({
+    data: {
+      orgId,
+      serviceId: service.id,
+      periodLabel: periodLabelFor(nextDueDate, parsed.data.billingCycle),
+      billingCycle: parsed.data.billingCycle,
+      amount,
+      currency: org.currency,
+      dueDate: nextDueDate,
+      status: statusFor(nextDueDate),
     },
   });
 
   await prisma.auditLog.create({
-    data: { orgId, action: "service.created", metadata: { serviceId: service.id, name: service.name, createdByAdmin: req.admin!.email } },
+    data: {
+      orgId,
+      action: "service.created",
+      metadata: { serviceId: service.id, name: service.name, paymentRequestId: paymentRequest.id, createdByAdmin: req.admin!.email },
+    },
   });
 
-  return res.status(201).json({ service });
+  return res.status(201).json({ service, paymentRequest });
 }
 
 // ------------------------------------------------------------------
 // PATCH /admin/orgs/:orgId/services/:serviceId
-// Edit pricing, pause, cancel, or reschedule a service
 // ------------------------------------------------------------------
 const updateServiceSchema = z.object({
   name: z.string().min(1).optional(),
@@ -191,8 +242,6 @@ export async function updateService(req: AdminRequest, res: Response) {
 
 // ------------------------------------------------------------------
 // PATCH /admin/orgs/:orgId/users/:userId
-// Deactivate/reactivate a specific client-org user (e.g. someone who
-// left the client's company) without deleting their history.
 // ------------------------------------------------------------------
 const updateUserSchema = z.object({
   isActive: z.boolean(),

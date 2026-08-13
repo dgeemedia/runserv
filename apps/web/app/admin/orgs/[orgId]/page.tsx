@@ -1,3 +1,4 @@
+// apps/web/app/admin/orgs/[orgId]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";

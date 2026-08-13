@@ -1,3 +1,4 @@
+// apps/web/app/page.tsx
 import Link from "next/link";
 
 export const metadata = {
@@ -97,7 +98,6 @@ export default function MarketingPage() {
             </div>
           </div>
 
-          {/* Signature element: a torn-receipt mockup of the actual product */}
           <div className="hero-visual">
             <div
               style={{
@@ -106,7 +106,6 @@ export default function MarketingPage() {
                 maxWidth: 400, margin: "0 auto", overflow: "hidden",
               }}
             >
-              {/* torn top edge */}
               <div
                 style={{
                   height: 16,
@@ -183,7 +182,7 @@ export default function MarketingPage() {
         </div>
       </section>
 
-      {/* ---------------- How it works (real sequence, numbering earned) ---------------- */}
+      {/* ---------------- How it works ---------------- */}
       <section id="how-it-works" style={{ maxWidth: 1120, margin: "0 auto", padding: "20px 24px 80px" }}>
         <h2 style={{ fontSize: 26, fontWeight: 700, marginBottom: 40 }}>How it works</h2>
         <div className="steps-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
@@ -229,22 +228,20 @@ export default function MarketingPage() {
           <div style={{ maxWidth: 360 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <img src="/logo/logo-mark-transparent.png" alt="RunServ" style={{ height: 20, width: "auto" }} />
+              <span style={{ fontSize: 15, fontWeight: 700 }}>
+                Run<span style={{ color: "#169DE3" }}>Serv</span>
+              </span>
             </div>
             <p style={{ fontSize: 13, color: "#868D99", lineHeight: 1.6, margin: 0 }}>
-              RunServ is Elorge Technologies Limited's partner in service — the
-              billing layer running behind everything we build.
+              Infrastructure billing, handled — one dashboard for every service
+              cost your clients owe, and one checkout to settle it.
             </p>
           </div>
 
           <div style={{ fontSize: 13, color: "#868D99", lineHeight: 1.7 }}>
             <div style={{ fontSize: 11, letterSpacing: "0.06em", color: "#868D99", textTransform: "uppercase", marginBottom: 6, opacity: 0.8 }}>
-              Elorge Technologies Limited
+              Contact
             </div>
-            <div>52 Millbrook Road, Edmonton</div>
-            <div>London, N9 7HX</div>
-            <a href="tel:+442035904976" style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
-              +44 203 590 4976
-            </a>
             <a href="mailto:support@runserv.org" style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
               support@runserv.org
             </a>
@@ -252,7 +249,7 @@ export default function MarketingPage() {
         </div>
 
         <div style={{ borderTop: "1px solid #282D37", paddingTop: 16, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <span style={{ fontSize: 12.5, color: "#868D99" }}>&copy; {new Date().getFullYear()} Elorge Technologies Limited</span>
+          <span style={{ fontSize: 12.5, color: "#868D99" }}>&copy; {new Date().getFullYear()} RunServ</span>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <span style={{ fontSize: 12.5, color: "#868D99" }}>RunServ &middot; Infrastructure billing, handled.</span>
             <Link href="/admin/login" style={{ fontSize: 11.5, color: "#565C68", textDecoration: "none" }}>

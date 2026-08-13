@@ -3,14 +3,6 @@
 
 import { useEffect, useState } from "react";
 
-/**
- * Captures the browser's `beforeinstallprompt` event (Chrome/Edge/Android)
- * and shows a sticky bottom banner offering to install the PWA. Unlike a
- * typical dismissible toast, this stays visible across page loads until
- * the app is actually installed — dismissing it only hides it for the
- * current session, it reappears next visit, since the goal is "quick
- * install", not "easy to make go away forever".
- */
 export default function InstallPwaBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [installed, setInstalled] = useState(false);
@@ -18,7 +10,6 @@ export default function InstallPwaBanner() {
   const [installing, setInstalling] = useState(false);
 
   useEffect(() => {
-    // Already running as an installed PWA — never show the banner.
     const isStandalone =
       window.matchMedia?.("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true;
@@ -27,8 +18,6 @@ export default function InstallPwaBanner() {
       return;
     }
 
-    // Permanent dismissal only happens on successful install, tracked
-    // via localStorage so it also stays hidden on future visits.
     if (localStorage.getItem("rs_pwa_installed") === "true") {
       setInstalled(true);
       return;
@@ -60,8 +49,6 @@ export default function InstallPwaBanner() {
     const { outcome } = await deferredPrompt.userChoice;
     setInstalling(false);
     if (outcome === "accepted") {
-      // `appinstalled` will also fire and persist this, but set it
-      // immediately so the banner disappears without waiting on the event.
       localStorage.setItem("rs_pwa_installed", "true");
       setInstalled(true);
     }
@@ -89,12 +76,17 @@ export default function InstallPwaBanner() {
       >
         <div
           style={{
-            width: 32, height: 32, borderRadius: 8, background: "#169DE3",
+            width: 36, height: 36, borderRadius: 8, background: "#0F1115",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 700, color: "#FFFFFF", flexShrink: 0, fontSize: 16,
+            flexShrink: 0, padding: 6, border: "1px solid #282D37",
           }}
         >
-          R
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo/logo-mark-transparent.png"
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#ECEEF2" }}>Install RunServ</div>
