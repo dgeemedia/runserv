@@ -92,6 +92,7 @@ export default function DashboardPage({ params }: Params) {
     setPaying(true);
     try {
       const { checkoutUrl } = await createCheckout(org.id, Array.from(selected), currency);
+      localStorage.setItem("rs_return_org_slug", params.org);
       window.location.href = checkoutUrl;
     } catch (err: any) {
       alert(err.message);

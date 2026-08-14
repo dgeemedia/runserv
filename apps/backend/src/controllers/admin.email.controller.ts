@@ -130,7 +130,7 @@ export async function sendMessageToOrg(req: AdminRequest, res: Response) {
 
   const results = await Promise.allSettled(
     recipients.map((user) =>
-      sendCustomMessageEmail({ to: user.email, name: user.name ?? undefined, subject, body })
+      sendCustomMessageEmail({ to: user.email, name: user.name ?? undefined, subject, body, orgId })
     )
   );
 

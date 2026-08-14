@@ -1,17 +1,13 @@
 // apps/backend/src/routes/internal.routes.ts
 import { Router, Request, Response, NextFunction } from "express";
+import multer from "multer";
 import { generatePaymentRequests } from "../jobs/generatePaymentRequests.job.js";
 import { sendPaymentReminders } from "../jobs/paymentReminders.job.js";
+import { handleInboundEmail } from "../controllers/inbound.controller.js";
 
 const router = Router();
+const upload = multer(); // memory storage — only reading text fields, no attachments kept
 
-/**
- * Render's free plan has no built-in scheduler (Cron Jobs require a
- * paid plan). Instead, these two endpoints let an external free
- * scheduler — Vercel's Cron Jobs, cron-job.org, GitHub Actions, etc. —
- * trigger the same job logic over HTTP on a schedule. Protected by a
- * shared secret so they can't be hit by anyone who finds the URL.
- */
 function requireCronSecret(req: Request, res: Response, next: NextFunction) {
   const provided = req.headers["x-cron-secret"];
   if (!process.env.CRON_SECRET || provided !== process.env.CRON_SECRET) {
@@ -39,5 +35,9 @@ router.post("/internal/jobs/send-reminders", requireCronSecret, async (_req, res
     return res.status(500).json({ error: err.message ?? "Job failed" });
   }
 });
+
+// upload.none() parses SendGrid's multipart/form-data body into
+// req.body as plain string fields (from/to/subject/text/...).
+router.post("/webhooks/email/inbound", upload.none(), handleInboundEmail);
 
 export default router;

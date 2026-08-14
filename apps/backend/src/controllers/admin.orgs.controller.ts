@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { AdminRequest } from "../middleware/admin.middleware.js";
 import { inviteUserToOrg } from "../services/invite.service.js";
+import { computeAmount } from "../lib/pricing.js";
 
 // ------------------------------------------------------------------
 // GET /admin/orgs
@@ -28,6 +29,7 @@ export async function getOrganization(req: AdminRequest, res: Response) {
       users: true,
       services: { orderBy: { createdAt: "desc" } },
       payments: { orderBy: { createdAt: "desc" }, take: 20 },
+      emailMessages: { orderBy: { createdAt: "desc" }, take: 50, include: { user: true } },
     },
   });
   if (!org) return res.status(404).json({ error: "Organization not found" });
@@ -161,13 +163,13 @@ export async function createService(req: AdminRequest, res: Response) {
 
   // Yearly billing is priced off monthlyAmount * 12 minus the org's
   // yearly discount, matching how the yearly total is presumably
-  // computed elsewhere (checkout/job) — kept here so the very first
-  // payment request an org sees isn't priced differently from the
-  // ones the cron job would generate for subsequent periods.
-  const amount =
-    parsed.data.billingCycle === "YEARLY"
-      ? parsed.data.monthlyAmount * 12 * (1 - Number(org.yearlyDiscountPct) / 100)
-      : parsed.data.monthlyAmount;
+  // computed elsewhere (checkout/job) — computeAmount() is shared with
+  // updateService and the cron job so all three stay in lockstep.
+  const amount = computeAmount(
+    parsed.data.monthlyAmount,
+    parsed.data.billingCycle,
+    Number(org.yearlyDiscountPct)
+  );
 
   const service = await prisma.service.create({
     data: {
@@ -207,6 +209,11 @@ export async function createService(req: AdminRequest, res: Response) {
 
 // ------------------------------------------------------------------
 // PATCH /admin/orgs/:orgId/services/:serviceId
+// Re-prices the outstanding (not yet paid/cancelled) PaymentRequest
+// when amount or billing cycle changes, so the client portal reflects
+// the new number immediately instead of waiting for the next cron
+// regeneration — previously the Service row updated but the already-
+// created PaymentRequest kept its stale amount.
 // ------------------------------------------------------------------
 const updateServiceSchema = z.object({
   name: z.string().min(1).optional(),
@@ -224,10 +231,37 @@ export async function updateService(req: AdminRequest, res: Response) {
 
   const { nextDueDate, ...rest } = parsed.data;
 
+  const existing = await prisma.service.findUnique({
+    where: { id: req.params.serviceId },
+    include: { org: true },
+  });
+  if (!existing || existing.orgId !== req.params.orgId) {
+    return res.status(404).json({ error: "Service not found in this organization" });
+  }
+
   const service = await prisma.service.update({
     where: { id: req.params.serviceId },
     data: { ...rest, ...(nextDueDate ? { nextDueDate: new Date(nextDueDate) } : {}) },
   });
+
+  const priceAffected = parsed.data.monthlyAmount !== undefined || parsed.data.billingCycle !== undefined;
+  if (priceAffected) {
+    const openRequest = await prisma.paymentRequest.findFirst({
+      where: { serviceId: service.id, status: { in: ["UPCOMING", "DUE", "OVERDUE"] } },
+      orderBy: { dueDate: "asc" },
+    });
+    if (openRequest) {
+      const newAmount = computeAmount(
+        Number(service.monthlyAmount),
+        service.billingCycle,
+        Number(existing.org.yearlyDiscountPct)
+      );
+      await prisma.paymentRequest.update({
+        where: { id: openRequest.id },
+        data: { amount: newAmount, billingCycle: service.billingCycle },
+      });
+    }
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -267,4 +301,37 @@ export async function updateOrgUser(req: AdminRequest, res: Response) {
   });
 
   return res.json({ user: { id: updated.id, email: updated.email, isActive: updated.isActive } });
+}
+
+// ------------------------------------------------------------------
+// DELETE /admin/orgs/:orgId/services/:serviceId
+// Hard-deletes only if the service has no paid history (nothing to
+// preserve). If it does, cancels instead — cascading a hard delete
+// would wipe the client's paid PaymentRequests/receipts too.
+// ------------------------------------------------------------------
+export async function deleteService(req: AdminRequest, res: Response) {
+  const { orgId, serviceId } = req.params;
+
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service || service.orgId !== orgId) {
+    return res.status(404).json({ error: "Service not found in this organization" });
+  }
+
+  const paidCount = await prisma.paymentRequest.count({
+    where: { serviceId, status: "PAID" },
+  });
+
+  if (paidCount > 0) {
+    await prisma.service.update({ where: { id: serviceId }, data: { status: "CANCELLED" } });
+    await prisma.auditLog.create({
+      data: { orgId, action: "service.cancelled", metadata: { serviceId, name: service.name, reason: "has paid history", byAdmin: req.admin!.email } },
+    });
+    return res.json({ message: `"${service.name}" has paid history, so it was cancelled instead of deleted`, cancelled: true });
+  }
+
+  await prisma.service.delete({ where: { id: serviceId } }); // cascades any unpaid PaymentRequests
+  await prisma.auditLog.create({
+    data: { orgId, action: "service.deleted", metadata: { serviceId, name: service.name, byAdmin: req.admin!.email } },
+  });
+  return res.json({ message: `"${service.name}" deleted`, cancelled: false });
 }

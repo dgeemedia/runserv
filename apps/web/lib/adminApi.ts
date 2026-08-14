@@ -4,10 +4,14 @@ import type {
   CreateOrganizationRequest,
   CreateServiceRequest,
   UpdateServiceRequest,
+  DeleteServiceResponse,
+  SendMessageRequest,
+  SendMessageResponse,
   Organization,
   Service,
   OrgUser,
   Payment,
+  EmailMessage,
 } from "@runserver/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -40,7 +44,7 @@ export async function listOrganizations() {
 
 export async function getOrganization(orgId: string) {
   const res = await fetch(`${API_URL}/admin/orgs/${orgId}`, { headers: authHeaders() });
-  return handle<{ org: Organization & { services: Service[]; users: OrgUser[]; payments: Payment[] } }>(res);
+  return handle<{ org: Organization & { services: Service[]; users: OrgUser[]; payments: Payment[]; emailMessages: EmailMessage[] } }>(res);
 }
 
 export async function updateOrgActive(orgId: string, isActive: boolean) {
@@ -124,6 +128,14 @@ export async function updateService(orgId: string, serviceId: string, payload: U
   return handle<{ service: Service }>(res);
 }
 
+export async function deleteService(orgId: string, serviceId: string) {
+  const res = await fetch(`${API_URL}/admin/orgs/${orgId}/services/${serviceId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  return handle<DeleteServiceResponse>(res);
+}
+
 export async function resendInvite(orgId: string, userId: string) {
   const res = await fetch(`${API_URL}/admin/orgs/${orgId}/users/${userId}/resend-invite`, {
     method: "POST",
@@ -140,13 +152,13 @@ export async function resendReceipt(orgId: string, paymentId: string) {
   return handle<{ message: string }>(res);
 }
 
-export async function sendMessageToOrg(orgId: string, payload: { subject: string; body: string; recipientUserId?: string }) {
+export async function sendMessageToOrg(orgId: string, payload: SendMessageRequest) {
   const res = await fetch(`${API_URL}/admin/orgs/${orgId}/message`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
   });
-  return handle<{ message: string }>(res);
+  return handle<SendMessageResponse>(res);
 }
 
 export async function sendTestEmail(to: string) {

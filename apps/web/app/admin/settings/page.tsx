@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getAdminFxRate, previewAdminFxRate, updateAdminFxRate, sendTestEmail } from "../../../lib/adminApi";
+import AdminBackLink from "../../../components/AdminBackLink";
 
 export default function AdminFxSettingsPage() {
   const [rate, setRate] = useState<any>(null);
@@ -88,6 +89,7 @@ export default function AdminFxSettingsPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#0F1115", color: "#ECEEF2", fontFamily: "system-ui, sans-serif" }}>
       <div style={{ maxWidth: 520, margin: "0 auto", padding: "32px 20px 80px" }}>
+        <AdminBackLink />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase" }}>Admin</div>

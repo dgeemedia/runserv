@@ -34,6 +34,8 @@ export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
 
 export type PaymentGateway = "PAYSTACK" | "FLUTTERWAVE";
 
+export type EmailDirection = "OUTBOUND" | "INBOUND";
+
 // ---- Core entities -----------------------------------------
 
 export interface Organization {
@@ -104,6 +106,19 @@ export interface ExchangeRate {
   effectiveRate: string; // marketRate * (1 + markupPct/100), computed server-side
   source: "manual" | "synced";
   updatedAt: string;
+}
+
+export interface EmailMessage {
+  id: string;
+  orgId: string;
+  userId: string | null;
+  user: Pick<OrgUser, "id" | "name" | "email"> | null;
+  direction: EmailDirection;
+  subject: string;
+  bodyText: string;
+  fromAddress: string;
+  toAddress: string;
+  createdAt: string;
 }
 
 // ---- Client-facing API DTOs ---------------------------------
@@ -200,4 +215,19 @@ export interface UpdateServiceRequest {
   billingCycle?: BillingCycle;
   status?: ServiceStatus;
   nextDueDate?: string;
+}
+
+export interface DeleteServiceResponse {
+  message: string;
+  cancelled: boolean; // true if it had paid history and was cancelled instead of removed
+}
+
+export interface SendMessageRequest {
+  subject: string;
+  body: string; // Markdown
+  recipientUserId?: string; // omit to send to every active user in the org
+}
+
+export interface SendMessageResponse {
+  message: string;
 }

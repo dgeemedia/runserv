@@ -8,6 +8,7 @@ import type { GatewayAdapter, VerifiedTransaction } from "../services/gateways/g
 import type { PaymentGateway } from "@runserver/types";
 import { sendReceiptEmail } from "../services/email.service.js";
 import { convertUsdToNgn, getFxRate } from "../services/fx.service.js";
+import { canonicalAppUrl } from "../lib/env.js";
 
 // ------------------------------------------------------------------
 // POST /orgs/:orgId/checkout
@@ -64,7 +65,7 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
     currency,
     paymentRequestIds: items.map((i) => i.id),
     orgId,
-    callbackUrl: `${process.env.WEB_APP_URL}/payment-complete`,
+    callbackUrl: `${canonicalAppUrl()}/payment-complete`,
   };
 
   // Try the org's preferred gateway first; if it fails for any reason

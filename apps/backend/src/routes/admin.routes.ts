@@ -9,6 +9,7 @@ import {
   createService,
   updateService,
   updateOrgUser,
+  deleteService,
 } from "../controllers/admin.orgs.controller.js";
 import { getRevenueSummary } from "../controllers/admin.revenue.controller.js";
 import {
@@ -47,5 +48,7 @@ router.get("/admin/fx-rate", requireAdminAuth, getFxRateAdmin);
 router.get("/admin/fx-rate/preview", requireAdminAuth, previewFxRateAdmin);
 router.patch("/admin/fx-rate", requireAdminAuth, updateFxRateAdmin);
 router.post("/admin/fx-rate/sync", requireAdminAuth, syncFxRateAdmin);
+
+router.delete("/admin/orgs/:orgId/services/:serviceId", requireAdminAuth, deleteService);
 
 export default router;

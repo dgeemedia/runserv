@@ -58,6 +58,7 @@ app.use("/auth/login", loginLimiter);
 app.use("/admin/auth/login", loginLimiter);
 app.use("/auth/forgot-password", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: "Too many attempts, try again later" } }));
 app.use("/internal/jobs", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts, try again later" } }));
+app.use("/webhooks/email/inbound", rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: "Too many requests" } }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

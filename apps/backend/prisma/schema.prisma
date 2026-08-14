@@ -35,6 +35,7 @@ model Organization {
   services        Service[]
   paymentRequests PaymentRequest[]
   payments        Payment[]
+  emailMessages   EmailMessage[]
   auditLogs       AuditLog[]
 
   @@map("organizations")
@@ -90,6 +91,7 @@ model User {
   invitedTokens InviteToken[]
   payments      Payment[]     @relation("InitiatedPayments")
   auditLogs     AuditLog[]
+  emailMessages EmailMessage[] // inbound replies best-effort matched to this user by From address
 
   @@index([orgId])
   @@map("users")
@@ -286,4 +288,26 @@ model AuditLog {
 
   @@index([orgId, createdAt])
   @@map("audit_logs")
+}
+
+enum EmailDirection {
+  OUTBOUND
+  INBOUND
+}
+
+model EmailMessage {
+  id          String         @id @default(cuid())
+  orgId       String
+  org         Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId      String?        // best-effort match of the sender for INBOUND messages, via From address
+  user        User?          @relation(fields: [userId], references: [id])
+  direction   EmailDirection
+  subject     String
+  bodyText    String
+  fromAddress String
+  toAddress   String
+  createdAt   DateTime       @default(now())
+
+  @@index([orgId, createdAt])
+  @@map("email_messages")
 }

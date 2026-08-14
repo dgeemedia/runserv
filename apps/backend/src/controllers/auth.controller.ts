@@ -7,6 +7,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { inviteUserToOrg } from "../services/invite.service.js";
 import { sendPasswordResetEmail } from "../services/email.service.js";
+import { canonicalAppUrl } from "../lib/env.js";
 // import { verifyTurnstile } from "../services/turnstile.service.js"; // disabled — see NEXT_PUBLIC_TURNSTILE_SITE_KEY setup
 import { AuthedRequest } from "../middleware/auth.middleware.js";
 
@@ -173,7 +174,7 @@ export async function forgotPassword(req: Request, res: Response) {
     },
   });
 
-  const resetUrl = `${process.env.WEB_APP_URL}/reset-password?token=${rawToken}`;
+  const resetUrl = `${canonicalAppUrl()}/reset-password?token=${rawToken}`;
   await sendPasswordResetEmail({ to: user.email, name: user.name ?? undefined, resetUrl });
 
   return res.json(genericResponse);

@@ -2,9 +2,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOrganization, createService, updateService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, sendMessageToOrg } from "../../../../lib/adminApi";
+import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, sendMessageToOrg } from "../../../../lib/adminApi";
 import MarkdownComposer from "../../../../components/MarkdownComposer";
-import type { Organization, Service, OrgUser, Payment, ServiceCategory, BillingCycle } from "@runserver/types";
+import AdminBackLink from "../../../../components/AdminBackLink";
+import type { Organization, Service, OrgUser, Payment, EmailMessage, ServiceCategory, BillingCycle } from "@runserver/types";
 
 interface Params {
   params: { orgId: string };
@@ -14,7 +15,7 @@ const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "S
 
 export default function AdminOrgDetailPage({ params }: Params) {
   const { orgId } = params;
-  const [org, setOrg] = useState<(Organization & { services: Service[]; users: OrgUser[]; payments: Payment[] }) | null>(null);
+  const [org, setOrg] = useState<(Organization & { services: Service[]; users: OrgUser[]; payments: Payment[]; emailMessages: EmailMessage[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddService, setShowAddService] = useState(false);
 
@@ -28,6 +29,20 @@ export default function AdminOrgDetailPage({ params }: Params) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Which service (by id) is currently being edited, if any — only one
+  // edit form open at a time to keep the row list legible.
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    category: "SERVER" as ServiceCategory,
+    description: "",
+    monthlyAmount: "",
+    billingCycle: "MONTHLY" as BillingCycle,
+    nextDueDate: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const [showMessage, setShowMessage] = useState(false);
   const [messageForm, setMessageForm] = useState({ subject: "", body: "", recipientUserId: "" });
@@ -59,9 +74,57 @@ export default function AdminOrgDetailPage({ params }: Params) {
     }
   }
 
+  function startEditService(service: Service) {
+    setEditingServiceId(service.id);
+    setEditError("");
+    setEditForm({
+      name: service.name,
+      category: service.category,
+      description: service.description ?? "",
+      monthlyAmount: String(service.monthlyAmount),
+      billingCycle: service.billingCycle,
+      nextDueDate: service.nextDueDate.slice(0, 10),
+    });
+  }
+
+  function cancelEditService() {
+    setEditingServiceId(null);
+    setEditError("");
+  }
+
+  async function handleSaveEditService(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingServiceId) return;
+    setEditError("");
+    setEditSaving(true);
+    try {
+      await updateService(orgId, editingServiceId, {
+        name: editForm.name,
+        category: editForm.category,
+        description: editForm.description || undefined,
+        monthlyAmount: Number(editForm.monthlyAmount),
+        billingCycle: editForm.billingCycle,
+        nextDueDate: editForm.nextDueDate,
+      });
+      setEditingServiceId(null);
+      await refresh();
+    } catch (err: any) {
+      setEditError(err.message);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   async function toggleStatus(service: Service) {
     const next = service.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
     await updateService(orgId, service.id, { status: next });
+    await refresh();
+  }
+
+  async function handleDeleteService(service: Service) {
+    if (!confirm(`Delete "${service.name}"? If it has paid history it'll be cancelled instead of removed.`)) return;
+    const { message } = await deleteService(orgId, service.id);
+    alert(message);
     await refresh();
   }
 
@@ -110,11 +173,25 @@ export default function AdminOrgDetailPage({ params }: Params) {
       });
       setMessageResult(message);
       setMessageForm({ subject: "", body: "", recipientUserId: "" });
+      await refresh(); // pull the just-sent message into the Conversation thread
     } catch (err: any) {
       setMessageResult(err.message);
     } finally {
       setMessageSending(false);
     }
+  }
+
+  // Opens the composer pre-filled to reply to a specific inbound message —
+  // subject gets a "Re:" prefix, recipient defaults to the matched user
+  // (falls back to "All active users" if the sender couldn't be matched).
+  function startReply(m: EmailMessage) {
+    setShowMessage(true);
+    setMessageResult("");
+    setMessageForm({
+      subject: m.subject.startsWith("Re:") ? m.subject : `Re: ${m.subject}`,
+      body: "",
+      recipientUserId: m.userId ?? "",
+    });
   }
 
   if (loading) return <div style={{ color: "#868D99", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Loading…</div>;
@@ -123,6 +200,7 @@ export default function AdminOrgDetailPage({ params }: Params) {
   return (
     <div style={{ minHeight: "100vh", background: "#0F1115", color: "#ECEEF2", fontFamily: "system-ui, sans-serif" }}>
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 80px" }}>
+        <AdminBackLink />
         <div style={{ fontSize: 11, letterSpacing: "0.08em", color: "#169DE3", textTransform: "uppercase" }}>Admin</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
           <h1 style={{ fontSize: 24, margin: "4px 0 0" }}>{org.name}</h1>
@@ -227,6 +305,44 @@ export default function AdminOrgDetailPage({ params }: Params) {
           )}
         </Section>
 
+        {/* Conversation thread — sent messages + inbound replies via Brevo inbound parsing */}
+        <Section title="Conversation">
+          {org.emailMessages?.length === 0 && <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>No messages yet.</p>}
+          {org.emailMessages?.map((m) => (
+            <Row key={m.id}>
+              <div style={{ maxWidth: 520 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, textTransform: "uppercase",
+                      background: m.direction === "INBOUND" ? "rgba(74,222,128,0.14)" : "rgba(22,157,227,0.14)",
+                      color: m.direction === "INBOUND" ? "#4ADE80" : "#4BB8F0",
+                    }}
+                  >
+                    {m.direction === "INBOUND" ? "Client reply" : "Sent"}
+                  </span>
+                  {m.direction === "INBOUND" && (
+                    <span style={{ fontSize: 12, color: "#868D99" }}>
+                      {m.user ? (m.user.name || m.user.email) : m.fromAddress}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 12, color: "#868D99" }}>{new Date(m.createdAt).toLocaleString()}</span>
+                </div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{m.subject}</div>
+                <div style={{ fontSize: 13, color: "#ECEEF2", whiteSpace: "pre-wrap", marginTop: 2 }}>{m.bodyText}</div>
+              </div>
+              {m.direction === "INBOUND" && (
+                <button
+                  onClick={() => startReply(m)}
+                  style={{ ...smallBtnStyle, padding: "6px 10px", fontSize: 11.5, background: "#282D37", color: "#ECEEF2", flexShrink: 0, alignSelf: "flex-start" }}
+                >
+                  Reply
+                </button>
+              )}
+            </Row>
+          ))}
+        </Section>
+
         {/* Services */}
         <Section
           title="Services"
@@ -261,20 +377,78 @@ export default function AdminOrgDetailPage({ params }: Params) {
           {org.services.length === 0 && !showAddService && <p style={{ color: "#868D99", fontSize: 13 }}>No services yet.</p>}
 
           {org.services.map((s) => (
-            <Row key={s.id}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
-                <div style={{ fontSize: 12, color: "#868D99" }}>
-                  {s.category} &middot; {s.billingCycle === "YEARLY" ? "Yearly" : "Monthly"} &middot; next due {new Date(s.nextDueDate).toLocaleDateString()}
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14 }}>${Number(s.monthlyAmount).toFixed(2)}/mo</span>
-                <button onClick={() => toggleStatus(s)} style={{ ...smallBtnStyle, background: s.status === "ACTIVE" ? "#282D37" : "#169DE3", color: s.status === "ACTIVE" ? "#ECEEF2" : "#FFFFFF" }}>
-                  {s.status === "ACTIVE" ? "Pause" : "Activate"}
-                </button>
-              </div>
-            </Row>
+            <div key={s.id}>
+              {editingServiceId === s.id ? (
+                <form onSubmit={handleSaveEditService} style={{ padding: 16, background: "#0F1115", borderRadius: 10, margin: "8px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <input
+                    placeholder="Service name"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    style={inputStyle}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value as ServiceCategory })} style={{ ...inputStyle, flex: 1 }}>
+                      {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={editForm.billingCycle} onChange={(e) => setEditForm({ ...editForm, billingCycle: e.target.value as BillingCycle })} style={{ ...inputStyle, flex: 1 }}>
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="YEARLY">Yearly</option>
+                    </select>
+                  </div>
+                  <input
+                    placeholder="Description (optional)"
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    style={inputStyle}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Monthly amount (USD)"
+                      required
+                      value={editForm.monthlyAmount}
+                      onChange={(e) => setEditForm({ ...editForm, monthlyAmount: e.target.value })}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <input
+                      type="date"
+                      required
+                      value={editForm.nextDueDate}
+                      onChange={(e) => setEditForm({ ...editForm, nextDueDate: e.target.value })}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                  </div>
+                  {editError && <p style={{ color: "#F87171", fontSize: 13, margin: 0 }}>{editError}</p>}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="submit" disabled={editSaving} style={smallBtnStyle}>{editSaving ? "Saving…" : "Save changes"}</button>
+                    <button type="button" onClick={cancelEditService} style={{ ...smallBtnStyle, background: "#282D37", color: "#ECEEF2" }}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <Row>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                    <div style={{ fontSize: 12, color: "#868D99" }}>
+                      {s.category} &middot; {s.billingCycle === "YEARLY" ? "Yearly" : "Monthly"} &middot; next due {new Date(s.nextDueDate).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontFamily: "monospace", fontSize: 14 }}>${Number(s.monthlyAmount).toFixed(2)}/mo</span>
+                    <button onClick={() => startEditService(s)} style={{ ...smallBtnStyle, padding: "8px 12px", background: "#282D37", color: "#ECEEF2" }}>
+                      Edit
+                    </button>
+                    <button onClick={() => toggleStatus(s)} style={{ ...smallBtnStyle, background: s.status === "ACTIVE" ? "#282D37" : "#169DE3", color: s.status === "ACTIVE" ? "#ECEEF2" : "#FFFFFF" }}>
+                      {s.status === "ACTIVE" ? "Pause" : "Activate"}
+                    </button>
+                    <button onClick={() => handleDeleteService(s)} style={{ ...smallBtnStyle, padding: "8px 12px", background: "#282D37", color: "#F87171" }}>
+                      Delete
+                    </button>
+                  </div>
+                </Row>
+              )}
+            </div>
           ))}
         </Section>
 
@@ -288,7 +462,7 @@ export default function AdminOrgDetailPage({ params }: Params) {
                   {p.amount} {p.currency}
                 </div>
                 <div style={{ fontSize: 12, color: "#868D99" }}>
-                  {p.gateway} &middot; {p.status} {p.receiptNumber ? `· ${p.receiptNumber}` : ""} {p.paidAt ? `· ${new Date(p.paidAt).toLocaleDateString()}` : ""}
+                  {p.gateway} &middot; {p.status} {p.receiptNumber ? `• ${p.receiptNumber}` : ""} {p.paidAt ? `• ${new Date(p.paidAt).toLocaleDateString()}` : ""}
                 </div>
               </div>
               {p.status === "SUCCESS" && (

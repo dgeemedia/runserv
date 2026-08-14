@@ -3,6 +3,7 @@ import SibApiV3Sdk from "sib-api-v3-sdk";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { canonicalAppUrl } from "../lib/env.js";
+import { prisma } from "../lib/prisma.js";
 
 const client = SibApiV3Sdk.ApiClient.instance;
 const apiKey = client.authentications["api-key"];
@@ -231,6 +232,7 @@ export async function sendCustomMessageEmail(params: {
   name?: string;
   subject: string;
   body: string; // Markdown
+  orgId: string; // used to build the reply-to address and log the thread
 }) {
   const rawHtml = marked.parse(params.body, { async: false, gfm: true, breaks: true }) as string;
 
@@ -262,7 +264,26 @@ export async function sendCustomMessageEmail(params: {
     ${safeHtml}
   `);
 
-  return send({ to: { email: params.to, name: params.name }, subject: params.subject, html });
+  const replyTo = `org-${params.orgId}@reply.runserv.org`;
+
+  await txEmailApi.sendTransacEmail({
+    sender: SENDER,
+    to: [{ email: params.to, name: params.name }],
+    replyTo: { email: replyTo },
+    subject: params.subject,
+    htmlContent: html,
+  });
+
+  await prisma.emailMessage.create({
+    data: {
+      orgId: params.orgId,
+      direction: "OUTBOUND",
+      subject: params.subject,
+      bodyText: params.body,
+      fromAddress: SENDER.email,
+      toAddress: params.to,
+    },
+  });
 }
 
 function escapeHtml(str: string) {
