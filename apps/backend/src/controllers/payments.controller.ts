@@ -135,8 +135,19 @@ export async function getOrgFxRate(_req: AuthedRequest, res: Response) {
 // transaction has been independently verified against the gateway's
 // own API (never trust the webhook body alone, even after signature
 // check, since a signature only proves origin, not current status).
+//
+// Exported (not just internal to this file) so the same idempotent
+// path can also be triggered by:
+//   - jobs/reconcilePendingPayments.job.ts, a periodic sweep that
+//     re-verifies any Payment stuck at PENDING in case its webhook
+//     never arrived or was rejected
+//   - controllers/admin.payments.controller.ts's resyncPayment, an
+//     on-demand "fix this one payment now" admin action
+// Both call sites re-verify against the gateway first and only ever
+// pass in a VerifiedTransaction — this function itself doesn't care
+// where the verification came from.
 // ------------------------------------------------------------------
-async function fulfillVerifiedPayment(verified: VerifiedTransaction) {
+export async function fulfillVerifiedPayment(verified: VerifiedTransaction) {
   if (verified.status !== "success") return;
 
   const payment = await prisma.payment.findUnique({ where: { gatewayRef: verified.reference } });

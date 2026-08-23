@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, sendMessageToOrg } from "../../../../lib/adminApi";
+import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, resyncPayment, sendMessageToOrg } from "../../../../lib/adminApi";
 import MarkdownComposer from "../../../../components/MarkdownComposer";
 import AdminBackLink from "../../../../components/AdminBackLink";
 import type { Organization, Service, OrgUser, Payment, EmailMessage, ServiceCategory, BillingCycle } from "@runserver/types";
@@ -48,6 +48,10 @@ export default function AdminOrgDetailPage({ params }: Params) {
   const [messageForm, setMessageForm] = useState({ subject: "", body: "", recipientUserId: "" });
   const [messageSending, setMessageSending] = useState(false);
   const [messageResult, setMessageResult] = useState("");
+
+  // Tracks which payment is currently being resynced so its button can
+  // show a "Checking…" state and avoid duplicate clicks.
+  const [resyncingPaymentId, setResyncingPaymentId] = useState<string | null>(null);
 
   async function refresh() {
     const data = await getOrganization(orgId);
@@ -154,6 +158,25 @@ export default function AdminOrgDetailPage({ params }: Params) {
       alert(message);
     } catch (err: any) {
       alert(err.message);
+    }
+  }
+
+  // Re-verifies a stuck payment against its gateway and, if the
+  // gateway confirms success, fulfills it — marks the Payment SUCCESS,
+  // marks the related PaymentRequests PAID, and sends the receipt
+  // email. Refreshes the org so the "Recent payments" list and the
+  // client's own dashboard state (via PaymentRequest.status) reflect
+  // the fix immediately.
+  async function handleResyncPayment(paymentId: string) {
+    setResyncingPaymentId(paymentId);
+    try {
+      const { message } = await resyncPayment(orgId, paymentId);
+      alert(message);
+      await refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setResyncingPaymentId(null);
     }
   }
 
@@ -465,12 +488,29 @@ export default function AdminOrgDetailPage({ params }: Params) {
                   {p.gateway} &middot; {p.status} {p.receiptNumber ? `• ${p.receiptNumber}` : ""} {p.paidAt ? `• ${new Date(p.paidAt).toLocaleDateString()}` : ""}
                 </div>
               </div>
-              {p.status === "SUCCESS" && (
+              {p.status === "SUCCESS" ? (
                 <button
                   onClick={() => handleResendReceipt(p.id)}
                   style={{ ...smallBtnStyle, padding: "6px 10px", fontSize: 11.5, background: "#282D37", color: "#ECEEF2" }}
                 >
                   Resend receipt
+                </button>
+              ) : (
+                // Covers PENDING (webhook may never have arrived) and
+                // FAILED (worth a second check in case the gateway's
+                // status changed since). Re-verifies directly against
+                // the gateway rather than trusting local state.
+                <button
+                  onClick={() => handleResyncPayment(p.id)}
+                  disabled={resyncingPaymentId === p.id}
+                  style={{
+                    ...smallBtnStyle, padding: "6px 10px", fontSize: 11.5,
+                    background: "#282D37", color: "#ECEEF2",
+                    opacity: resyncingPaymentId === p.id ? 0.6 : 1,
+                    cursor: resyncingPaymentId === p.id ? "default" : "pointer",
+                  }}
+                >
+                  {resyncingPaymentId === p.id ? "Checking…" : "Resync with gateway"}
                 </button>
               )}
             </Row>

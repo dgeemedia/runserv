@@ -152,6 +152,19 @@ export async function resendReceipt(orgId: string, paymentId: string) {
   return handle<{ message: string }>(res);
 }
 
+// Re-verifies a stuck/PENDING payment directly against its gateway and,
+// if the gateway confirms success, fulfills it (marks SUCCESS, marks
+// the related PaymentRequests PAID, sends the receipt email) — the
+// same path a webhook would have taken, run on demand instead of
+// waiting for the next scheduled reconciliation sweep.
+export async function resyncPayment(orgId: string, paymentId: string) {
+  const res = await fetch(`${API_URL}/admin/orgs/${orgId}/payments/${paymentId}/resync`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  return handle<{ message: string; alreadySynced: boolean }>(res);
+}
+
 export async function sendMessageToOrg(orgId: string, payload: SendMessageRequest) {
   const res = await fetch(`${API_URL}/admin/orgs/${orgId}/message`, {
     method: "POST",
