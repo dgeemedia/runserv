@@ -12,6 +12,7 @@ import {
   deleteService,
 } from "../controllers/admin.orgs.controller.js";
 import { getRevenueSummary } from "../controllers/admin.revenue.controller.js";
+import { markPaymentsPaidManually } from "../controllers/admin.payments.controller.js";
 import {
   getFxRateAdmin,
   previewFxRateAdmin,
@@ -39,6 +40,8 @@ router.post("/admin/orgs/:orgId/users/:userId/resend-invite", requireAdminAuth, 
 router.post("/admin/orgs/:orgId/payments/:paymentId/resend-receipt", requireAdminAuth, resendReceipt);
 
 router.post("/admin/orgs/:orgId/message", requireAdminAuth, sendMessageToOrg);
+
+router.post("/admin/orgs/:orgId/payment-requests/mark-paid", requireAdminAuth, markPaymentsPaidManually);
 
 router.post("/admin/test-email", requireAdminAuth, sendTestEmailAdmin);
 

@@ -44,11 +44,13 @@ export async function reconcilePendingPayments() {
   let stillPending = 0;
   let failed = 0;
 
-  for (const payment of stuck) {
+    for (const payment of stuck) {
+    if (payment.gateway === "MANUAL") continue; // manual payments are fulfilled immediately at creation, never sit PENDING
+
     try {
       const adapter = getGateway(payment.gateway);
       const verified = await adapter.verifyTransaction(payment.gatewayRef);
-
+      
       if (verified.status === "success") {
         await fulfillVerifiedPayment(verified);
         reconciled++;

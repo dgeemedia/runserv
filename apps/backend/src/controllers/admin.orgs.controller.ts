@@ -29,6 +29,11 @@ export async function getOrganization(req: AdminRequest, res: Response) {
       users: true,
       services: { orderBy: { createdAt: "desc" } },
       payments: { orderBy: { createdAt: "desc" }, take: 20 },
+      paymentRequests: {
+        where: { status: { in: ["DUE", "OVERDUE", "UPCOMING"] } },
+        orderBy: { dueDate: "asc" },
+        include: { service: true },
+      },
       emailMessages: { orderBy: { createdAt: "desc" }, take: 50, include: { user: true } },
     },
   });

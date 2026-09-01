@@ -6,6 +6,12 @@ import Link from "next/link";
 import { getRevenueSummary } from "../../../lib/adminApi";
 import AdminBackLink from "../../../components/AdminBackLink";
 
+const GATEWAY_LABEL: Record<string, string> = {
+  PAYSTACK: "Paystack",
+  FLUTTERWAVE: "Flutterwave",
+  MANUAL: "Bank transfer",
+};
+
 export default function AdminRevenuePage() {
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -37,12 +43,12 @@ export default function AdminRevenuePage() {
         ))}
       </Section>
 
-      <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ display: "flex", gap: 16 }}>
         <div style={{ flex: 1 }}>
           <Section title="By gateway">
             {summary.byGateway.map((g: any) => (
               <Row key={g.gateway}>
-                <span>{g.gateway}</span>
+                <span>{GATEWAY_LABEL[g.gateway] ?? g.gateway}</span>
                 <span style={{ fontFamily: "monospace", fontSize: 13 }}>${Number(g.totalUsd).toFixed(2)}</span>
               </Row>
             ))}
@@ -65,7 +71,7 @@ export default function AdminRevenuePage() {
           <Row key={p.id}>
             <div>
               <div style={{ fontWeight: 600, fontSize: 13.5 }}>{p.orgName}</div>
-              <div style={{ fontSize: 11, color: "#868D99" }}>{p.receiptNumber} &middot; {p.gateway} &middot; {p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}</div>
+              <div style={{ fontSize: 11, color: "#868D99" }}>{p.receiptNumber} &middot; {GATEWAY_LABEL[p.gateway] ?? p.gateway} &middot; {p.paidAt ? new Date(p.paidAt).toLocaleDateString() : "—"}</div>
             </div>
             <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: 13 }}>
               <div>{p.amount} {p.currency}</div>

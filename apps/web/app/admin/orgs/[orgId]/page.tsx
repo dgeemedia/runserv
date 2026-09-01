@@ -2,10 +2,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, resyncPayment, sendMessageToOrg } from "../../../../lib/adminApi";
+import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, resyncPayment, sendMessageToOrg, markPaymentsPaid } from "../../../../lib/adminApi";
 import MarkdownComposer from "../../../../components/MarkdownComposer";
 import AdminBackLink from "../../../../components/AdminBackLink";
-import type { Organization, Service, OrgUser, Payment, EmailMessage, ServiceCategory, BillingCycle } from "@runserver/types";
+import type { Organization, Service, OrgUser, Payment, PaymentRequest, EmailMessage, ServiceCategory, BillingCycle } from "@runserver/types";
 
 interface Params {
   params: { orgId: string };
@@ -15,7 +15,13 @@ const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "S
 
 export default function AdminOrgDetailPage({ params }: Params) {
   const { orgId } = params;
-  const [org, setOrg] = useState<(Organization & { services: Service[]; users: OrgUser[]; payments: Payment[]; emailMessages: EmailMessage[] }) | null>(null);
+  const [org, setOrg] = useState<Organization & {
+  services: Service[];
+  users: OrgUser[];
+  payments: Payment[];
+  paymentRequests: (PaymentRequest & { service: Service })[];
+  emailMessages: EmailMessage[];
+} | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddService, setShowAddService] = useState(false);
 
@@ -52,6 +58,14 @@ export default function AdminOrgDetailPage({ params }: Params) {
   // Tracks which payment is currently being resynced so its button can
   // show a "Checking…" state and avoid duplicate clicks.
   const [resyncingPaymentId, setResyncingPaymentId] = useState<string | null>(null);
+
+  // Manual settlement (bank transfer, cash, etc.) — admin selects
+  // outstanding PaymentRequests and marks them paid directly, bypassing
+  // both gateways entirely.
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
+  const [showMarkPaid, setShowMarkPaid] = useState(false);
+  const [markPaidNote, setMarkPaidNote] = useState("");
+  const [markingPaid, setMarkingPaid] = useState(false);
 
   async function refresh() {
     const data = await getOrganization(orgId);
@@ -177,6 +191,37 @@ export default function AdminOrgDetailPage({ params }: Params) {
       alert(err.message);
     } finally {
       setResyncingPaymentId(null);
+    }
+  }
+
+  function toggleRequest(id: string) {
+    setSelectedRequestIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  // Confirms and marks all currently-selected outstanding PaymentRequests
+  // as paid via a manual (non-gateway) Payment record.
+  async function handleMarkPaid() {
+    if (selectedRequestIds.size === 0) return;
+    if (!confirm(`Mark ${selectedRequestIds.size} item(s) as paid? This can't be undone from here.`)) return;
+    setMarkingPaid(true);
+    try {
+      const { message } = await markPaymentsPaid(orgId, {
+        paymentRequestIds: Array.from(selectedRequestIds),
+        note: markPaidNote || undefined,
+      });
+      alert(message);
+      setSelectedRequestIds(new Set());
+      setMarkPaidNote("");
+      setShowMarkPaid(false);
+      await refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setMarkingPaid(false);
     }
   }
 
@@ -475,6 +520,55 @@ export default function AdminOrgDetailPage({ params }: Params) {
           ))}
         </Section>
 
+        {/* Outstanding — manual settlement for payments received outside the gateways */}
+        <Section
+          title="Outstanding"
+          action={
+            selectedRequestIds.size > 0 && (
+              <button onClick={() => setShowMarkPaid((s) => !s)} style={smallBtnStyle}>
+                {showMarkPaid ? "Cancel" : `Mark ${selectedRequestIds.size} as paid`}
+              </button>
+            )
+          }
+        >
+          {org.paymentRequests.length === 0 && (
+            <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>Nothing outstanding.</p>
+          )}
+          {org.paymentRequests.map((pr) => (
+            <Row key={pr.id}>
+              <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedRequestIds.has(pr.id)}
+                  onChange={() => toggleRequest(pr.id)}
+                  style={{ width: 16, height: 16, accentColor: "#169DE3" }}
+                />
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{pr.service.name}</div>
+                  <div style={{ fontSize: 12, color: "#868D99" }}>
+                    {pr.periodLabel} &middot; {pr.status}
+                  </div>
+                </div>
+              </label>
+              <span style={{ fontFamily: "monospace", fontSize: 14 }}>${Number(pr.amount).toFixed(2)}</span>
+            </Row>
+          ))}
+
+          {showMarkPaid && (
+            <div style={{ padding: 16, background: "#0F1115", borderRadius: 10, margin: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                placeholder="Note (optional) — e.g. bank transfer ref #4521"
+                value={markPaidNote}
+                onChange={(e) => setMarkPaidNote(e.target.value)}
+                style={inputStyle}
+              />
+              <button onClick={handleMarkPaid} disabled={markingPaid} style={smallBtnStyle}>
+                {markingPaid ? "Marking…" : `Confirm — mark ${selectedRequestIds.size} as paid`}
+              </button>
+            </div>
+          )}
+        </Section>
+
         {/* Recent payments */}
         <Section title="Recent payments">
           {org.payments.length === 0 && <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>No payments yet.</p>}
@@ -495,6 +589,8 @@ export default function AdminOrgDetailPage({ params }: Params) {
                 >
                   Resend receipt
                 </button>
+              ) : p.gateway === "MANUAL" ? (
+                <span style={{ fontSize: 11.5, color: "#868D99" }}>Manual</span>
               ) : (
                 // Covers PENDING (webhook may never have arrived) and
                 // FAILED (worth a second check in case the gateway's

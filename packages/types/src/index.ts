@@ -32,7 +32,7 @@ export type PaymentRequestStatus = "UPCOMING" | "DUE" | "OVERDUE" | "PAID" | "CA
 
 export type PaymentStatus = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
 
-export type PaymentGateway = "PAYSTACK" | "FLUTTERWAVE";
+export type PaymentGateway = "PAYSTACK" | "FLUTTERWAVE" | "MANUAL";
 
 export type EmailDirection = "OUTBOUND" | "INBOUND";
 
@@ -106,6 +106,23 @@ export interface ExchangeRate {
   effectiveRate: string; // marketRate * (1 + markupPct/100), computed server-side
   source: "manual" | "synced";
   updatedAt: string;
+}
+
+export interface PaymentHistoryItem {
+  id: string; // PaymentRequest id
+  periodLabel: string;
+  amount: string;
+  currency: string;
+  dueDate: string;
+  service: Pick<Service, "name" | "category">;
+  payment: {
+    id: string;
+    gateway: PaymentGateway;
+    receiptNumber: string | null;
+    paidAt: string | null;
+    amount: string;
+    currency: string;
+  } | null;
 }
 
 export interface EmailMessage {
@@ -230,4 +247,14 @@ export interface SendMessageRequest {
 
 export interface SendMessageResponse {
   message: string;
+}
+
+export interface MarkPaymentsPaidRequest {
+  paymentRequestIds: string[];
+  note?: string;
+}
+
+export interface MarkPaymentsPaidResponse {
+  message: string;
+  paymentId: string;
 }

@@ -5,6 +5,7 @@ import {
   handlePaystackWebhook,
   handleFlutterwaveWebhook,
   listPaymentRequests,
+  listPaymentHistory,
   getOrgFxRate,
 } from "../controllers/payments.controller.js";
 import { requireAuth, requireRole, requireMatchingOrgParam } from "../middleware/auth.middleware.js";
@@ -12,6 +13,7 @@ import { requireAuth, requireRole, requireMatchingOrgParam } from "../middleware
 const router = Router();
 
 router.get("/orgs/:orgId/payment-requests", requireAuth, requireMatchingOrgParam, listPaymentRequests);
+router.get("/orgs/:orgId/payment-history", requireAuth, requireMatchingOrgParam, listPaymentHistory);
 router.get("/orgs/:orgId/fx-rate", requireAuth, requireMatchingOrgParam, getOrgFxRate);
 
 // FINANCE and OWNER can initiate payments; plain MEMBER cannot (view-only)

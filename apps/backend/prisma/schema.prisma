@@ -217,6 +217,7 @@ enum PaymentStatus {
 enum PaymentGateway {
   PAYSTACK
   FLUTTERWAVE
+  MANUAL
 }
 
 model Payment {

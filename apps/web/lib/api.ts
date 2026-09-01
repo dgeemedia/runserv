@@ -94,6 +94,27 @@ export async function getPaymentRequests(orgId: string) {
   }>;
 }
 
+export async function getPaymentHistory(orgId: string) {
+  const res = await fetch(`${API_URL}/orgs/${orgId}/payment-history`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Could not load payment history");
+  return (await res.json()).items as Array<{
+    id: string;
+    periodLabel: string;
+    amount: string;
+    currency: string;
+    dueDate: string;
+    service: { name: string; category: string };
+    payment: {
+      id: string;
+      gateway: "PAYSTACK" | "FLUTTERWAVE" | "MANUAL";
+      receiptNumber: string | null;
+      paidAt: string | null;
+      amount: string;
+      currency: string;
+    } | null;
+  }>;
+}
+
 export async function createCheckout(orgId: string, paymentRequestIds: string[], currency: "USD" | "NGN" = "USD") {
   const res = await fetch(`${API_URL}/orgs/${orgId}/checkout`, {
     method: "POST",

@@ -31,7 +31,15 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
   const orgId = req.user!.orgId;
   const { paymentRequestIds, currency } = parsed.data;
 
-  const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+
+  // Defensive only — the admin "new org" form's zod schema restricts
+  // preferredGateway to PAYSTACK/FLUTTERWAVE, so this should be
+  // unreachable. Guards against the type-level possibility now that
+  // PaymentGateway includes MANUAL for Payment records.
+  if (org.preferredGateway === "MANUAL") {
+    return res.status(500).json({ error: "This organization is not configured with a valid payment gateway." });
+  }
 
   const items = await prisma.paymentRequest.findMany({
     where: { id: { in: paymentRequestIds }, orgId, status: { in: ["DUE", "UPCOMING", "OVERDUE"] } },
@@ -173,16 +181,22 @@ export async function fulfillVerifiedPayment(verified: VerifiedTransaction) {
     }),
   ]);
 
-  const [org, items, initiator] = await Promise.all([
+    const [org, items, initiator] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: verified.orgId } }),
     prisma.paymentRequest.findMany({ where: { id: { in: verified.paymentRequestIds } }, include: { service: true } }),
     payment.initiatedByUserId ? prisma.user.findUnique({ where: { id: payment.initiatedByUserId } }) : null,
   ]);
 
-  if (initiator) {
+  // Manual payments (bank transfer, cash, etc.) have no initiating user —
+  // fall back to the org's OWNER(s) so a receipt still goes out.
+  const receiptRecipients = initiator
+    ? [initiator]
+    : await prisma.user.findMany({ where: { orgId: verified.orgId, role: "OWNER", isActive: true } });
+
+  for (const recipient of receiptRecipients) {
     await sendReceiptEmail({
-      to: initiator.email,
-      name: initiator.name ?? undefined,
+      to: recipient.email,
+      name: recipient.name ?? undefined,
       orgName: org.name,
       receiptNumber,
       items: items.map((i) => ({ name: i.service.name, amount: Number(i.amount).toFixed(2) })), // line items shown in USD (canonical)
@@ -251,6 +265,23 @@ export async function listPaymentRequests(req: AuthedRequest, res: Response) {
     where: { orgId: req.user!.orgId, status: { in: ["DUE", "OVERDUE", "UPCOMING"] } },
     include: { service: true },
     orderBy: { dueDate: "asc" },
+  });
+
+  return res.json({ items });
+}
+
+// ------------------------------------------------------------------
+// GET /orgs/:orgId/payment-history
+// Everything the client has already paid — powers the client-facing
+// "Payment history" section so a PaymentRequest doesn't just vanish
+// from the dashboard the moment it flips to PAID (whether via a
+// gateway or a manual admin settlement).
+// ------------------------------------------------------------------
+export async function listPaymentHistory(req: AuthedRequest, res: Response) {
+  const items = await prisma.paymentRequest.findMany({
+    where: { orgId: req.user!.orgId, status: "PAID" },
+    include: { service: true, payment: true },
+    orderBy: { dueDate: "desc" },
   });
 
   return res.json({ items });

@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getPaymentRequests, createCheckout, getFxRate, resolveOrg, OrgAccessError } from "../../../../lib/api";
+import { getPaymentRequests, getPaymentHistory, createCheckout, getFxRate, resolveOrg, OrgAccessError } from "../../../../lib/api";
 import Logo from "../../../../components/Logo";
 import LoadingScreen from "../../../../components/LoadingScreen";
 import UserMenu from "../../../../components/UserMenu";
@@ -26,11 +26,18 @@ const CATEGORY_ICON: Record<string, string> = {
   CONSULTING: "◒", OTHER: "○",
 };
 
+const GATEWAY_LABEL: Record<string, string> = {
+  PAYSTACK: "Paystack",
+  FLUTTERWAVE: "Flutterwave",
+  MANUAL: "Bank transfer",
+};
+
 export default function DashboardPage({ params }: Params) {
   const router = useRouter();
   const [state, setState] = useState<LoadState>("loading");
   const [org, setOrg] = useState<{ id: string; name: string } | null>(null);
   const [items, setItems] = useState<Awaited<ReturnType<typeof getPaymentRequests>>>([]);
+  const [history, setHistory] = useState<Awaited<ReturnType<typeof getPaymentHistory>>>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [paying, setPaying] = useState(false);
   const [currency, setCurrency] = useState<"USD" | "NGN">("USD");
@@ -43,16 +50,18 @@ export default function DashboardPage({ params }: Params) {
       return;
     }
 
-    resolveOrg(params.org)
+        resolveOrg(params.org)
       .then(async (resolvedOrg) => {
         setOrg(resolvedOrg);
-        const [requests, rate] = await Promise.all([
+        const [requests, rate, paidHistory] = await Promise.all([
           getPaymentRequests(resolvedOrg.id),
           getFxRate(resolvedOrg.id),
+          getPaymentHistory(resolvedOrg.id),
         ]);
         setItems(requests);
         setSelected(new Set(requests.filter((i) => i.status !== "UPCOMING").map((i) => i.id)));
         setFxRate(rate);
+        setHistory(paidHistory);
         setState("ready");
       })
       .catch((err) => {
@@ -238,7 +247,51 @@ export default function DashboardPage({ params }: Params) {
                 );
               })}
             </div>
-          </>
+                    </>
+        )}
+
+        {/* Payment history — items already paid, whether via gateway or a manual settlement */}
+        {history.length > 0 && (
+          <div style={{ marginTop: 32 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>Payment history</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {history.map((h) => (
+                <div
+                  key={h.id}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "14px 18px", background: "#171A21", border: "1px solid #282D37", borderRadius: 12,
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                    <span
+                      style={{
+                        width: 34, height: 34, borderRadius: 9, background: "#0F1115",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 14, color: "#4ADE80", flexShrink: 0, border: "1px solid #282D37",
+                      }}
+                    >
+                      ✓
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {h.service.name}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, fontSize: 12, color: "#868D99" }}>
+                        <span>{h.periodLabel}</span>
+                        {h.payment?.paidAt && <span>&middot; {new Date(h.payment.paidAt).toLocaleDateString()}</span>}
+                        {h.payment?.gateway && <span>&middot; {GATEWAY_LABEL[h.payment.gateway] ?? h.payment.gateway}</span>}
+                        {h.payment?.receiptNumber && <span>&middot; {h.payment.receiptNumber}</span>}
+                      </div>
+                    </span>
+                  </span>
+                  <span style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 600, color: "#4ADE80", flexShrink: 0, marginLeft: 12 }}>
+                    ${Number(h.amount).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 

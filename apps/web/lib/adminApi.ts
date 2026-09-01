@@ -7,10 +7,13 @@ import type {
   DeleteServiceResponse,
   SendMessageRequest,
   SendMessageResponse,
+  MarkPaymentsPaidRequest,
+  MarkPaymentsPaidResponse,
   Organization,
   Service,
   OrgUser,
   Payment,
+  PaymentRequest,
   EmailMessage,
 } from "@runserver/types";
 
@@ -44,7 +47,15 @@ export async function listOrganizations() {
 
 export async function getOrganization(orgId: string) {
   const res = await fetch(`${API_URL}/admin/orgs/${orgId}`, { headers: authHeaders() });
-  return handle<{ org: Organization & { services: Service[]; users: OrgUser[]; payments: Payment[]; emailMessages: EmailMessage[] } }>(res);
+  return handle<{
+    org: Organization & {
+      services: Service[];
+      users: OrgUser[];
+      payments: Payment[];
+      paymentRequests: (PaymentRequest & { service: Service })[];
+      emailMessages: EmailMessage[];
+    };
+  }>(res);
 }
 
 export async function updateOrgActive(orgId: string, isActive: boolean) {
@@ -181,4 +192,13 @@ export async function sendTestEmail(to: string) {
     body: JSON.stringify({ to }),
   });
   return handle<{ message: string }>(res);
+}
+
+export async function markPaymentsPaid(orgId: string, payload: MarkPaymentsPaidRequest) {
+  const res = await fetch(`${API_URL}/admin/orgs/${orgId}/payment-requests/mark-paid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return handle<MarkPaymentsPaidResponse>(res);
 }
