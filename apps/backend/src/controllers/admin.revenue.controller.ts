@@ -5,47 +5,60 @@ import { AdminRequest } from "../middleware/admin.middleware.js";
 
 // ------------------------------------------------------------------
 // GET /admin/revenue
-// Aggregates SUCCESS payments across every client, always in USD
-// (the canonical `usdAmount` field) so NGN and USD charges roll up
-// into one comparable total rather than needing separate totals per
-// currency.
+// Aggregates SUCCESS payments across every client the calling admin
+// can see, always in USD (the canonical `usdAmount` field) so NGN and
+// USD charges roll up into one comparable total rather than needing
+// separate totals per currency.
+//
+// Tenant-scoped: an AGENCY admin sees only their own tenant's revenue
+// (their clients' gross payments — not RunServ's platform fee cut of
+// it, see platformFeeUsd below). A PLATFORM admin sees every tenant's
+// gross revenue, same as before this upgrade.
 // ------------------------------------------------------------------
-export async function getRevenueSummary(_req: AdminRequest, res: Response) {
+export async function getRevenueSummary(req: AdminRequest, res: Response) {
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [allTime, thisMonth, byOrgRaw, byGatewayRaw, byCurrencyRaw, recent] = await Promise.all([
-    prisma.payment.aggregate({ where: { status: "SUCCESS" }, _sum: { usdAmount: true } }),
+  const tenantScope = req.admin!.isPlatformAdmin ? {} : { tenantId: req.admin!.tenantId };
+
+  const [allTime, thisMonth, byOrgRaw, byGatewayRaw, byCurrencyRaw, recent, platformFeeAllTime] = await Promise.all([
+    prisma.payment.aggregate({ where: { status: "SUCCESS", ...tenantScope }, _sum: { usdAmount: true } }),
     prisma.payment.aggregate({
-      where: { status: "SUCCESS", paidAt: { gte: startOfMonth } },
+      where: { status: "SUCCESS", paidAt: { gte: startOfMonth }, ...tenantScope },
       _sum: { usdAmount: true },
       _count: true,
     }),
     prisma.payment.groupBy({
       by: ["orgId"],
-      where: { status: "SUCCESS" },
+      where: { status: "SUCCESS", ...tenantScope },
       _sum: { usdAmount: true },
       _count: true,
     }),
     prisma.payment.groupBy({
       by: ["gateway"],
-      where: { status: "SUCCESS" },
+      where: { status: "SUCCESS", ...tenantScope },
       _sum: { usdAmount: true },
       _count: true,
     }),
     prisma.payment.groupBy({
       by: ["currency"],
-      where: { status: "SUCCESS" },
+      where: { status: "SUCCESS", ...tenantScope },
       _sum: { usdAmount: true },
       _count: true,
     }),
     prisma.payment.findMany({
-      where: { status: "SUCCESS" },
+      where: { status: "SUCCESS", ...tenantScope },
       orderBy: { paidAt: "desc" },
       take: 15,
       include: { org: { select: { name: true } } },
     }),
+    // RunServ's own cut — only meaningful/shown to platform admins,
+    // since an agency's platform fee is a cost to them, not "their"
+    // revenue in the sense this endpoint otherwise reports.
+    req.admin!.isPlatformAdmin
+      ? prisma.platformFeeLedger.aggregate({ _sum: { feeUsdAmount: true } })
+      : null,
   ]);
 
   const orgNames = await prisma.organization.findMany({
@@ -59,6 +72,7 @@ export async function getRevenueSummary(_req: AdminRequest, res: Response) {
       totalUsdAllTime: (allTime._sum.usdAmount ?? 0).toString(),
       totalUsdThisMonth: (thisMonth._sum.usdAmount ?? 0).toString(),
       paymentsThisMonth: thisMonth._count,
+      platformFeeUsdAllTime: platformFeeAllTime ? (platformFeeAllTime._sum.feeUsdAmount ?? 0).toString() : null,
       byOrg: byOrgRaw
         .map((r) => ({
           orgId: r.orgId,

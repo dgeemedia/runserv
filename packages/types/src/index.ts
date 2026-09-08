@@ -36,6 +36,10 @@ export type PaymentGateway = "PAYSTACK" | "FLUTTERWAVE" | "MANUAL";
 
 export type EmailDirection = "OUTBOUND" | "INBOUND";
 
+export type TenantType = "PLATFORM" | "AGENCY";
+export type TenantFeeModel = "TRANSACTION_PCT" | "FX_SPREAD_SHARE" | "FLAT_SUBSCRIPTION";
+export type TenantStatus = "PENDING_ONBOARDING" | "ACTIVE" | "SUSPENDED";
+
 // ---- Core entities -----------------------------------------
 
 export interface Organization {
@@ -138,6 +142,60 @@ export interface EmailMessage {
   createdAt: string;
 }
 
+// ---- Tenants -------------------------------------------------
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  type: TenantType;
+  status: TenantStatus;
+  supportEmail: string | null;
+  flutterwaveSubaccountId: string | null;
+  flutterwaveOnboardedAt: string | null;
+  feeModel: TenantFeeModel;
+  feePct: string; // Decimal serialized as string over the wire
+  flatFeeUsd: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface TenantWithCounts extends Tenant {
+  _count: { organizations: number; payments: number };
+}
+
+export interface TenantSignupRequest {
+  tenantName: string;
+  slug: string;
+  adminEmail: string;
+  adminName?: string;
+  password: string;
+}
+
+export interface TenantSignupResponse {
+  token: string;
+  admin: { id: string; email: string; name: string | null };
+  tenant: Pick<Tenant, "id" | "name" | "slug" | "status">;
+  nextStep: "connect_payment";
+}
+
+export interface ConnectFlutterwaveRequest {
+  flutterwaveSubaccountId: string;
+}
+
+export interface UpdateMyTenantRequest {
+  name?: string;
+  supportEmail?: string;
+}
+
+export interface PlatformUpdateTenantRequest {
+  feeModel?: TenantFeeModel;
+  feePct?: number;
+  flatFeeUsd?: number;
+  status?: TenantStatus;
+  isActive?: boolean;
+}
+
 // ---- Client-facing API DTOs ---------------------------------
 
 export interface LoginRequest {
@@ -178,6 +236,7 @@ export interface RevenueSummary {
   totalUsdAllTime: string;
   totalUsdThisMonth: string;
   paymentsThisMonth: number;
+  platformFeeUsdAllTime: string | null; // only populated for platform admins
   byOrg: Array<{ orgId: string; orgName: string; totalUsd: string; paymentsCount: number }>;
   byGateway: Array<{ gateway: PaymentGateway; totalUsd: string; paymentsCount: number }>;
   byCurrency: Array<{ currency: string; totalUsd: string; paymentsCount: number }>;
@@ -203,6 +262,7 @@ export interface AdminLoginRequest {
 export interface AdminLoginResponse {
   token: string;
   admin: { id: string; email: string; name: string | null };
+  tenant: Pick<Tenant, "id" | "name" | "slug" | "type" | "status">;
 }
 
 export interface CreateOrganizationRequest {

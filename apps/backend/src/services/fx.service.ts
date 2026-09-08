@@ -5,24 +5,51 @@ const PAIR = "USD_NGN";
 
 /**
  * The rate actually charged to clients: the stored market rate plus
- * your configured margin. This is the ONLY place this formula lives —
- * every checkout and every display value calls through here, so
- * changing your margin never requires touching more than one row.
+ * the tenant's configured margin. This is the ONLY place this formula
+ * lives — every checkout and every display value calls through here,
+ * so changing a tenant's margin never requires touching more than one row.
  */
 function computeEffectiveRate(marketRate: number, markupPct: number) {
   return marketRate * (1 + markupPct / 100);
 }
 
-export async function getFxRate() {
-  let row = await prisma.exchangeRate.findUnique({ where: { pair: PAIR } });
+/**
+ * Finds (or lazily creates) the platform's own ExchangeRate row — this
+ * is the single source of truth for `marketRate` (the raw USD->NGN
+ * number, which is not a per-tenant concept) and doubles as the
+ * default markup for any tenant that hasn't set their own yet.
+ */
+async function getPlatformTenantId(): Promise<string> {
+  const platform = await prisma.tenant.findFirstOrThrow({ where: { type: "PLATFORM" } });
+  return platform.id;
+}
 
-  // First run: seed a sane starting point so checkout never 500s on a
-  // missing row. Admin should immediately review/adjust this in /admin.
-  if (!row) {
-    row = await prisma.exchangeRate.create({
-      data: { pair: PAIR, marketRate: 1550.0, markupPct: 2.0, source: "manual" },
-    });
-  }
+async function getOrCreateRow(tenantId: string) {
+  let row = await prisma.exchangeRate.findUnique({ where: { tenantId_pair: { tenantId, pair: PAIR } } });
+  if (row) return row;
+
+  // No row yet for this tenant — fall back to the platform's market
+  // rate (never invent a market rate per-tenant) with a sane default
+  // markup, so checkout never 500s for a freshly onboarded tenant.
+  const platformTenantId = await getPlatformTenantId();
+  const platformRow =
+    tenantId === platformTenantId
+      ? null // avoid infinite recursion when seeding the platform's own row
+      : await prisma.exchangeRate.findUnique({ where: { tenantId_pair: { tenantId: platformTenantId, pair: PAIR } } });
+
+  return prisma.exchangeRate.create({
+    data: {
+      tenantId,
+      pair: PAIR,
+      marketRate: platformRow ? platformRow.marketRate : 1550.0,
+      markupPct: 2.0,
+      source: "manual",
+    },
+  });
+}
+
+export async function getFxRate(tenantId: string) {
+  const row = await getOrCreateRow(tenantId);
 
   const marketRate = Number(row.marketRate);
   const markupPct = Number(row.markupPct);
@@ -37,44 +64,47 @@ export async function getFxRate() {
   };
 }
 
-export async function convertUsdToNgn(amountUsd: number) {
-  const rate = await getFxRate();
+export async function convertUsdToNgn(tenantId: string, amountUsd: number) {
+  const rate = await getFxRate(tenantId);
   const effective = Number(rate.effectiveRate);
   return { amountNgn: Math.round(amountUsd * effective * 100) / 100, effectiveRate: effective };
 }
 
-export async function updateFxRate(params: { marketRate?: number; markupPct?: number; adminId: string }) {
-  const existing = await prisma.exchangeRate.findUnique({ where: { pair: PAIR } });
+export async function updateFxRate(params: { tenantId: string; marketRate?: number; markupPct?: number; adminId: string }) {
+  const { tenantId, adminId, ...rest } = params;
+  await getOrCreateRow(tenantId); // ensure a row exists so upsert's `update` branch is the common path
 
   return prisma.exchangeRate.upsert({
-    where: { pair: PAIR },
+    where: { tenantId_pair: { tenantId, pair: PAIR } },
     create: {
+      tenantId,
       pair: PAIR,
-      marketRate: params.marketRate ?? 1550.0,
-      markupPct: params.markupPct ?? 2.0,
+      marketRate: rest.marketRate ?? 1550.0,
+      markupPct: rest.markupPct ?? 2.0,
       source: "manual",
-      updatedByAdminId: params.adminId,
+      updatedByAdminId: adminId,
     },
     update: {
-      ...(params.marketRate !== undefined ? { marketRate: params.marketRate, source: "manual" } : {}),
-      ...(params.markupPct !== undefined ? { markupPct: params.markupPct } : {}),
-      updatedByAdminId: params.adminId,
+      ...(rest.marketRate !== undefined ? { marketRate: rest.marketRate, source: "manual" } : {}),
+      ...(rest.markupPct !== undefined ? { markupPct: rest.markupPct } : {}),
+      updatedByAdminId: adminId,
     },
   });
 }
 
 /**
- * Pulls a live USD->NGN rate from a free public endpoint so the admin
- * doesn't have to hand-type it every day. This only updates
- * `marketRate` — `markupPct` (your margin) is untouched, since that's
- * a business decision, not a market fact.
+ * Pulls a live USD->NGN rate from a free public endpoint so the
+ * platform admin doesn't have to hand-type it every day. Only the
+ * PLATFORM tenant's row should call this — an agency tenant's markup
+ * is a business decision, not a market fact, and their `marketRate`
+ * should track the platform's, not its own separately synced value.
  */
-export async function syncMarketRate(adminId: string) {
+export async function syncMarketRate(tenantId: string, adminId: string) {
   const rate = await fetchLiveMarketRate();
 
   const updated = await prisma.exchangeRate.upsert({
-    where: { pair: PAIR },
-    create: { pair: PAIR, marketRate: rate.value, markupPct: 2.0, source: "synced", updatedByAdminId: adminId },
+    where: { tenantId_pair: { tenantId, pair: PAIR } },
+    create: { tenantId, pair: PAIR, marketRate: rate.value, markupPct: 2.0, source: "synced", updatedByAdminId: adminId },
     update: { marketRate: rate.value, source: "synced", updatedByAdminId: adminId },
   });
 
@@ -84,11 +114,11 @@ export async function syncMarketRate(adminId: string) {
 /**
  * Fetches the live rate WITHOUT saving it — lets the admin preview
  * what "sync" would set marketRate to, and see it applied against the
- * current markupPct, before committing to it. Also returns a second
- * reference point (the average of two providers) since any single
- * provider can occasionally be stale or wrong, and this is money.
+ * tenant's current markupPct, before committing to it. Also returns a
+ * second reference point (the average of two providers) since any
+ * single provider can occasionally be stale or wrong, and this is money.
  */
-export async function previewMarketRate() {
+export async function previewMarketRate(tenantId: string) {
   const [primary, secondary] = await Promise.allSettled([
     fetchLiveMarketRate(),
     fetchLiveMarketRateFallback(),
@@ -102,7 +132,7 @@ export async function previewMarketRate() {
     throw new Error("Could not reach any exchange rate provider — enter the rate manually instead");
   }
 
-  const current = await getFxRate();
+  const current = await getFxRate(tenantId);
 
   return {
     quotes: rates,

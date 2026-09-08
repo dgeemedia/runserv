@@ -15,13 +15,18 @@ import { AuthedRequest } from "../middleware/auth.middleware.js";
 export async function resolveOrgBySlug(req: AuthedRequest, res: Response) {
   const { slug } = req.params;
 
-  const org = await prisma.organization.findUnique({ where: { slug } });
+  // `slug` is now only unique per-tenant (@@unique([tenantId, slug])),
+  // so it can no longer be used alone as a lookup key — two orgs on
+  // different tenants could share a slug. The JWT's orgId is globally
+  // unique and already trusted, so look up by that instead and use
+  // the URL's slug only to confirm it matches (not as the lookup key).
+  const org = await prisma.organization.findUnique({ where: { id: req.user!.orgId } });
 
   if (!org || !org.isActive) {
     return res.status(404).json({ error: "Organization not found" });
   }
 
-  if (org.id !== req.user!.orgId) {
+  if (org.slug !== slug) {
     // Don't say "wrong org" — same generic 403 whether the slug
     // belongs to someone else entirely or just isn't this user's org.
     return res.status(403).json({ error: "You don't have access to this organization" });

@@ -29,6 +29,9 @@ export default function AdminRevenuePage() {
         <StatCard label="Total revenue (all time)" value={`$${Number(summary.totalUsdAllTime).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
         <StatCard label="This month" value={`$${Number(summary.totalUsdThisMonth).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
         <StatCard label="Payments this month" value={summary.paymentsThisMonth} />
+        {summary.platformFeeUsdAllTime !== null && (
+          <StatCard label="RunServ platform fees earned" value={`$${Number(summary.platformFeeUsdAllTime).toLocaleString(undefined, { minimumFractionDigits: 2 })}`} />
+        )}
       </div>
 
       <Section title="By client">

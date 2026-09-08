@@ -48,6 +48,28 @@ export const flutterwaveAdapter: GatewayAdapter = {
         redirect_url: params.callbackUrl,
         customer: { email: params.email },
         meta: { orgId: params.orgId, paymentRequestIds: params.paymentRequestIds.join(",") },
+        // Split settlement: RunServ (the main Flutterwave account) takes
+        // `platformSplitPct` of the transaction as commission; the
+        // REMAINDER settles to the tenant's sub-account. This is the
+        // "percentage" split type, which is unambiguous in Flutterwave's
+        // docs — the "flat_subaccount" alternative is described
+        // inconsistently across their own documentation (some pages say
+        // the subaccount keeps the flat amount, others say the subaccount
+        // is charged it and the main account keeps the rest), so it's
+        // deliberately avoided here. Verify this against Flutterwave's
+        // current docs and a real sandbox transaction before relying on
+        // it — https://developer.flutterwave.com/docs/collecting-payments/split-payments
+        ...(params.split
+          ? {
+              subaccounts: [
+                {
+                  id: params.split.tenantSubaccountId,
+                  split_type: "percentage",
+                  split_value: params.split.platformSplitPct,
+                },
+              ],
+            }
+          : {}),
       }),
     });
 

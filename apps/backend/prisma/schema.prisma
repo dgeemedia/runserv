@@ -1,7 +1,11 @@
 // ==========================================================
 // RunServ — Prisma schema
-// One org = one client company. Each org has its own users,
-// services, payment requests, and payment history.
+// Multi-tenant: a Tenant is an agency/operator using RunServ to
+// bill their own clients. Each Tenant has its own admin staff,
+// its own Organizations (their clients), its own FX markup, and
+// its own Flutterwave sub-account for payment settlement.
+// A Tenant with tenantType=PLATFORM is RunServ itself (us) — the
+// one tenant whose AdminUsers can manage other tenants.
 // ==========================================================
 
 generator client {
@@ -15,13 +19,69 @@ datasource db {
 }
 
 // ----------------------------------------------------------
-// Organizations (your clients)
+// Tenants — agencies/operators using RunServ to bill their
+// own clients. This is the top of the data hierarchy.
+// ----------------------------------------------------------
+
+enum TenantType {
+  PLATFORM // RunServ itself — its AdminUsers manage other tenants
+  AGENCY   // a customer of RunServ, billing their own clients
+}
+
+enum TenantFeeModel {
+  TRANSACTION_PCT    // flat % of every checkout
+  FX_SPREAD_SHARE    // % of the FX markup on NGN conversions
+  FLAT_SUBSCRIPTION  // fixed monthly fee, spread stays theirs
+}
+
+enum TenantStatus {
+  PENDING_ONBOARDING // signed up, hasn't connected payment yet
+  ACTIVE
+  SUSPENDED
+}
+
+model Tenant {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique // used in URLs: runserv.org/t/acme-agency
+  type         TenantType   @default(AGENCY)
+  status       TenantStatus @default(PENDING_ONBOARDING)
+  supportEmail String?
+
+  // Flutterwave split-payment settlement target for this tenant.
+  // Null until they complete onboarding step 2 (connect payment).
+  flutterwaveSubaccountId String?
+  flutterwaveOnboardedAt  DateTime?
+
+  // Platform fee RunServ takes from this tenant's transactions.
+  feeModel  TenantFeeModel @default(TRANSACTION_PCT)
+  feePct    Decimal        @default(3.0) @db.Decimal(5, 2) // meaning depends on feeModel
+  flatFeeUsd Decimal?      @db.Decimal(10, 2) // used only when feeModel = FLAT_SUBSCRIPTION
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adminUsers    AdminUser[]
+  organizations Organization[]
+  exchangeRates ExchangeRate[]
+  payments      Payment[]
+  platformFees  PlatformFeeLedger[]
+  platformAuditLogs PlatformAuditLog[]
+
+  @@map("tenants")
+}
+
+// ----------------------------------------------------------
+// Organizations (a tenant's clients)
 // ----------------------------------------------------------
 
 model Organization {
   id                String         @id @default(cuid())
+  tenantId          String
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name              String
-  slug              String         @unique // used in URLs: runserv.org/acme-studio
+  slug              String         // used in URLs: runserv.org/acme-studio — unique per tenant, not globally
   currency          String         @default("USD")
   yearlyDiscountPct Decimal        @default(15.0) @db.Decimal(5, 2) // % off when billed yearly
   preferredGateway  PaymentGateway @default(FLUTTERWAVE) // tried first at checkout; the other gateway is the automatic fallback if this one fails
@@ -38,19 +98,26 @@ model Organization {
   emailMessages   EmailMessage[]
   auditLogs       AuditLog[]
 
+  @@unique([tenantId, slug])
+  @@index([tenantId])
   @@map("organizations")
 }
 
 // ----------------------------------------------------------
-// AdminUser — your (RunServ's) internal staff, distinct from
-// client-org users. Manages orgs, services, and pricing across
-// every client. Deliberately a separate model from `User` so a
-// bug in org-scoping logic can never accidentally grant a client
-// cross-org or admin access.
+// AdminUser — staff who manage orgs/services/pricing.
+// Scoped to a Tenant: an AGENCY tenant's admins can only see
+// that tenant's organizations. PLATFORM tenant admins (RunServ
+// staff) additionally get cross-tenant access, enforced in the
+// application layer, not by relaxing this schema relation.
+// Deliberately a separate model from `User` so a bug in org-
+// scoping logic can never accidentally grant a client cross-org
+// or admin access.
 // ----------------------------------------------------------
 
 model AdminUser {
   id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   email        String   @unique
   name         String?
   passwordHash String
@@ -60,8 +127,54 @@ model AdminUser {
 
   organizationsCreated Organization[]
   exchangeRateUpdates  ExchangeRate[]
+  platformAuditLogs    PlatformAuditLog[]
 
+  @@index([tenantId])
   @@map("admin_users")
+}
+
+// ----------------------------------------------------------
+// Platform fee ledger — one row per settled payment, recording
+// what RunServ earned from that transaction. Kept separate from
+// Payment so tenant fee-model changes never need to rewrite
+// historical payment records, and platform revenue reporting
+// never has to recompute from feePct history.
+// ----------------------------------------------------------
+
+model PlatformFeeLedger {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  paymentId     String   @unique
+  payment       Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  feeModel      TenantFeeModel
+  feeUsdAmount  Decimal  @db.Decimal(12, 2) // RunServ's cut of this payment, in USD
+  tenantUsdAmount Decimal @db.Decimal(12, 2) // what settled to the tenant's sub-account, in USD
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("platform_fee_ledger")
+}
+
+// ----------------------------------------------------------
+// Platform audit log — records changes RunServ staff make to a
+// tenant's rules (fee model, rate, status). Kept separate from
+// AuditLog (which is org-scoped and requires an orgId) since these
+// are tenant-level actions, not client-level ones.
+// ----------------------------------------------------------
+
+model PlatformAuditLog {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  performedByAdminId String
+  performedByAdmin   AdminUser @relation(fields: [performedByAdminId], references: [id])
+  action             String    // "tenant.rules_updated", "tenant.flutterwave_connected", etc.
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("platform_audit_log")
 }
 
 // ----------------------------------------------------------
@@ -222,6 +335,8 @@ enum PaymentGateway {
 
 model Payment {
   id                String         @id @default(cuid())
+  tenantId          String
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
   orgId             String
   org               Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
   gateway           PaymentGateway
@@ -230,6 +345,7 @@ model Payment {
   currency          String         @default("USD")    // "USD" or "NGN" — whatever the client chose at checkout
   usdAmount         Decimal        @db.Decimal(12, 2)  // canonical USD value, for reconciliation regardless of charge currency
   fxRateApplied     Decimal?       @db.Decimal(12, 4)  // USD->NGN effective rate used, null when charged in USD
+  platformFeeUsd    Decimal?       @db.Decimal(12, 2)  // RunServ's cut, snapshotted at checkout time (see lib/platformFee.ts) — used to write PlatformFeeLedger on fulfillment without recomputing against a tenant's fee model that may have since changed
   status            PaymentStatus  @default(PENDING)
   initiatedByUserId String?
   initiatedBy       User?          @relation("InitiatedPayments", fields: [initiatedByUserId], references: [id])
@@ -243,32 +359,43 @@ model Payment {
   updatedAt         DateTime       @updatedAt
 
   paymentRequests PaymentRequest[]
+  platformFee     PlatformFeeLedger?
 
   @@index([orgId])
+  @@index([tenantId])
   @@map("payments")
 }
 
 // ----------------------------------------------------------
-// Exchange rates — admin-configurable USD->NGN conversion used
-// at checkout when a client chooses to pay in NGN instead of USD.
+// Exchange rates — USD->NGN conversion used at checkout when a
+// client chooses to pay in NGN instead of USD.
 // `marketRate` is the raw rate (synced from a market source or set
-// manually); `markupPct` is your buffer on top of it. The effective
-// rate charged to clients is marketRate * (1 + markupPct / 100),
-// computed at checkout time — never stored redundantly here, so
-// there's one place (markupPct) to change your margin.
+// manually, always platform-wide — no tenant marks up the market
+// itself). `markupPct` is each TENANT's own buffer on top of it,
+// so two agencies can charge different NGN margins on the same
+// underlying rate. The effective rate charged to a client is
+// marketRate * (1 + markupPct / 100), computed at checkout time.
+//
+// One row per tenant per pair (tenantId, pair). The PLATFORM
+// tenant's row (RunServ itself) doubles as the market-rate source
+// and the default markup for any tenant that hasn't set their own —
+// application logic falls back to it when a tenant has no row yet.
 // ----------------------------------------------------------
 
 model ExchangeRate {
   id               String     @id @default(cuid())
-  pair             String     @unique // "USD_NGN"
+  tenantId         String
+  tenant           Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pair             String     // "USD_NGN"
   marketRate       Decimal    @db.Decimal(12, 4) // raw rate, e.g. 1 USD = 1550.00 NGN
-  markupPct        Decimal    @default(2.0) @db.Decimal(5, 2) // your margin on top, e.g. 2%
+  markupPct        Decimal    @default(2.0) @db.Decimal(5, 2) // this tenant's margin on top, e.g. 2%
   source           String     @default("manual") // "manual" or "synced"
   updatedByAdminId String?
   updatedByAdmin   AdminUser? @relation(fields: [updatedByAdminId], references: [id])
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
+  @@unique([tenantId, pair])
   @@map("exchange_rates")
 }
 

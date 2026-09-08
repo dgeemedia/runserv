@@ -3,19 +3,30 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Logo from "./Logo";
+import { getCachedTenant } from "../lib/adminApi";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { href: "/admin/orgs", label: "Clients" },
   { href: "/admin/revenue", label: "Revenue" },
   { href: "/admin/settings", label: "FX settings" },
+  { href: "/admin/tenant", label: "Tenant" },
 ];
+
+const PLATFORM_NAV_ITEM = { href: "/admin/platform/tenants", label: "Platform" };
 
 export default function AdminNav() {
   const pathname = usePathname() || "";
   const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [tenant, setTenant] = useState<ReturnType<typeof getCachedTenant>>(null);
+
+  useEffect(() => {
+    setTenant(getCachedTenant());
+  }, []);
+
+  const navItems = tenant?.type === "PLATFORM" ? [...BASE_NAV_ITEMS, PLATFORM_NAV_ITEM] : BASE_NAV_ITEMS;
 
   function isActive(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -23,6 +34,7 @@ export default function AdminNav() {
 
   function handleLogout() {
     localStorage.removeItem("rs_admin_token");
+    localStorage.removeItem("rs_admin_tenant");
     router.push("/admin/login");
   }
 
@@ -52,10 +64,13 @@ export default function AdminNav() {
             >
               Admin
             </span>
+            {tenant && tenant.type === "AGENCY" && (
+              <span style={{ marginLeft: 8, fontSize: 12.5, color: "#868D99" }}>{tenant.name}</span>
+            )}
           </Link>
 
           <nav style={{ display: "flex", gap: 4 }}>
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const active = isActive(item.href);
               return (
                 <Link

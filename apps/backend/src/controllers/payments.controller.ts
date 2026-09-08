@@ -8,6 +8,7 @@ import type { GatewayAdapter, VerifiedTransaction } from "../services/gateways/g
 import type { PaymentGateway } from "@runserver/types";
 import { sendReceiptEmail } from "../services/email.service.js";
 import { convertUsdToNgn, getFxRate } from "../services/fx.service.js";
+import { computePlatformFeeUsd } from "../lib/platformFee.js";
 import { canonicalAppUrl } from "../lib/env.js";
 
 // ------------------------------------------------------------------
@@ -18,6 +19,13 @@ import { canonicalAppUrl } from "../lib/env.js";
 // default for new orgs); if that gateway's initialization fails for
 // any reason, automatically retries on the other gateway before
 // giving up — see the fallback logic below.
+//
+// Multi-tenant: if the org's tenant is an AGENCY with a connected
+// Flutterwave sub-account, the transaction is split at the gateway —
+// the tenant's cut settles to their sub-account, RunServ's platform
+// fee is retained. PLATFORM-tenant orgs (RunServ's own clients) and
+// AGENCY tenants that haven't connected payment yet checkout without
+// a split, same as before this upgrade.
 // ------------------------------------------------------------------
 const checkoutSchema = z.object({
   paymentRequestIds: z.array(z.string()).min(1, "Select at least one item to pay"),
@@ -31,7 +39,7 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
   const orgId = req.user!.orgId;
   const { paymentRequestIds, currency } = parsed.data;
 
-    const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId } });
+  const org = await prisma.organization.findUniqueOrThrow({ where: { id: orgId }, include: { tenant: true } });
 
   // Defensive only — the admin "new org" form's zod schema restricts
   // preferredGateway to PAYSTACK/FLUTTERWAVE, so this should be
@@ -56,12 +64,39 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
 
   let chargeAmount = totalUsd;
   let fxRateApplied: number | null = null;
+  let fxMarkupUsd: number | null = null;
 
   if (currency === "NGN") {
-    const converted = await convertUsdToNgn(totalUsd);
+    const [converted, rate] = await Promise.all([
+      convertUsdToNgn(org.tenantId, totalUsd),
+      getFxRate(org.tenantId),
+    ]);
     chargeAmount = converted.amountNgn;
     fxRateApplied = converted.effectiveRate;
+    fxMarkupUsd = totalUsd * (Number(rate.markupPct) / 100);
   }
+
+  // Platform fee — computed in USD terms regardless of charge currency
+  // for consistent reporting, then expressed as a % of the WHOLE
+  // transaction (platformSplitPct) for the gateway split below.
+  const platformFeeUsd = computePlatformFeeUsd(org.tenant, { totalUsd, fxMarkupUsd });
+  const platformFeeInChargeCurrency =
+    currency === "NGN" && fxRateApplied ? platformFeeUsd * fxRateApplied : platformFeeUsd;
+
+  // IMPORTANT: split is built whenever the tenant is an AGENCY with a
+  // connected sub-account — NOT gated on platformFeeInChargeCurrency > 0.
+  // A tenant on FLAT_SUBSCRIPTION legitimately has a $0 per-transaction
+  // fee, but their clients' money must still route to THEIR sub-account,
+  // not RunServ's main account. Passing platformSplitPct: 0 tells the
+  // gateway "send 100% to the tenant" — omitting `split` entirely here
+  // was the bug this comment exists to prevent from being reintroduced.
+  const split =
+    org.tenant.type === "AGENCY" && org.tenant.flutterwaveSubaccountId
+      ? {
+          tenantSubaccountId: org.tenant.flutterwaveSubaccountId,
+          platformSplitPct: chargeAmount > 0 ? platformFeeInChargeCurrency / chargeAmount : 0,
+        }
+      : undefined;
 
   const gateway = getGateway(org.preferredGateway);
   const fallbackGatewayId: PaymentGateway = org.preferredGateway === "FLUTTERWAVE" ? "PAYSTACK" : "FLUTTERWAVE";
@@ -74,6 +109,12 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
     paymentRequestIds: items.map((i) => i.id),
     orgId,
     callbackUrl: `${canonicalAppUrl()}/payment-complete`,
+    // Split settlement is currently only wired up for Flutterwave (see
+    // flutterwave.adapter.ts) — Paystack's adapter ignores `split` for
+    // now. If org.preferredGateway is PAYSTACK, an AGENCY tenant's
+    // transactions will NOT split until paystack.adapter.ts implements
+    // Paystack's subaccount API too. Flagged in IMPLEMENTATION.md.
+    split,
   };
 
   // Try the org's preferred gateway first; if it fails for any reason
@@ -103,6 +144,7 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
 
   await prisma.payment.create({
     data: {
+      tenantId: org.tenantId,
       orgId,
       gateway: usedGateway.id,
       gatewayRef: tx.reference,
@@ -110,6 +152,7 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
       currency,
       usdAmount: totalUsd,
       fxRateApplied,
+      platformFeeUsd,
       status: "PENDING",
       initiatedByUserId: req.user!.id,
     },
@@ -133,8 +176,9 @@ export async function createCheckout(req: AuthedRequest, res: Response) {
 // GET /orgs/:orgId/fx-rate
 // Lets the dashboard show a live NGN preview before checkout.
 // ------------------------------------------------------------------
-export async function getOrgFxRate(_req: AuthedRequest, res: Response) {
-  const rate = await getFxRate();
+export async function getOrgFxRate(req: AuthedRequest, res: Response) {
+  const org = await prisma.organization.findUniqueOrThrow({ where: { id: req.user!.orgId } });
+  const rate = await getFxRate(org.tenantId);
   return res.json({ rate });
 }
 
@@ -180,6 +224,24 @@ export async function fulfillVerifiedPayment(verified: VerifiedTransaction) {
       data: { status: "PAID", paymentId: payment.id },
     }),
   ]);
+
+  // Record what RunServ earned from this transaction, using the fee
+  // snapshotted at checkout time (see payments.controller.ts createCheckout
+  // and lib/platformFee.ts) — never recomputed here, so a tenant's fee
+  // model changing after checkout but before settlement can't silently
+  // alter a transaction that already quoted the client a total.
+  const feeUsd = payment.platformFeeUsd ? Number(payment.platformFeeUsd) : 0;
+  await prisma.platformFeeLedger.upsert({
+    where: { paymentId: payment.id },
+    create: {
+      tenantId: payment.tenantId,
+      paymentId: payment.id,
+      feeModel: (await prisma.tenant.findUniqueOrThrow({ where: { id: payment.tenantId } })).feeModel,
+      feeUsdAmount: feeUsd,
+      tenantUsdAmount: Number(payment.usdAmount) - feeUsd,
+    },
+    update: {}, // idempotent — fulfillVerifiedPayment can be called more than once for the same reference
+  });
 
     const [org, items, initiator] = await Promise.all([
     prisma.organization.findUniqueOrThrow({ where: { id: verified.orgId } }),

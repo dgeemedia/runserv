@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getAdminFxRate, previewAdminFxRate, updateAdminFxRate, sendTestEmail } from "../../../lib/adminApi";
+import { getAdminFxRate, previewAdminFxRate, updateAdminFxRate, sendTestEmail, getCachedTenant } from "../../../lib/adminApi";
 import AdminBackLink from "../../../components/AdminBackLink";
 
 export default function AdminFxSettingsPage() {
@@ -16,6 +16,7 @@ export default function AdminFxSettingsPage() {
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof previewAdminFxRate>>["preview"] | null>(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const isPlatformAdmin = getCachedTenant()?.type === "PLATFORM";
 
   const [testEmailTo, setTestEmailTo] = useState("");
   const [testEmailSending, setTestEmailSending] = useState(false);
@@ -56,7 +57,9 @@ export default function AdminFxSettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
-      await updateAdminFxRate({ marketRate: Number(marketRate), markupPct: Number(markupPct) });
+      await updateAdminFxRate(
+        isPlatformAdmin ? { marketRate: Number(marketRate), markupPct: Number(markupPct) } : { markupPct: Number(markupPct) }
+      );
       await refresh();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -101,6 +104,7 @@ export default function AdminFxSettingsPage() {
         <p style={{ color: "#868D99", fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>
           Clients paying in NGN are charged <strong>market rate × (1 + your markup)</strong>. Service pricing
           stays in USD everywhere else — this only affects the number shown at checkout when a client picks NGN.
+          {!isPlatformAdmin && " The underlying market rate is set by RunServ platform staff; you control your own markup below."}
         </p>
 
         {/* Currently live rate */}
@@ -118,7 +122,10 @@ export default function AdminFxSettingsPage() {
           </div>
         </div>
 
-        {/* Preview step — see the raw quote before applying any margin */}
+        {/* Preview step — see the raw quote before applying any margin.
+            Only useful to platform admins, since they're the only ones
+            who can act on it by setting a new market rate. */}
+        {isPlatformAdmin && (
         <div style={{ marginBottom: 20 }}>
           <button type="button" onClick={handlePreview} disabled={previewing} style={smallBtnStyle}>
             {previewing ? "Fetching quotes…" : "Preview live market rate"}
@@ -158,13 +165,20 @@ export default function AdminFxSettingsPage() {
             Nothing here is saved until you pick a value and hit "Save rate" below.
           </p>
         </div>
+        )}
 
         <div style={{ height: 1, background: "#282D37", margin: "20px 0" }} />
 
         {/* Apply — explicit, separate step */}
         <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <label style={labelStyle}>Market rate (₦ per $1)</label>
-          <input type="number" step="0.01" value={marketRate} onChange={(e) => setMarketRate(e.target.value)} style={inputStyle} />
+          {isPlatformAdmin ? (
+            <input type="number" step="0.01" value={marketRate} onChange={(e) => setMarketRate(e.target.value)} style={inputStyle} />
+          ) : (
+            <div style={{ ...inputStyle, color: "#868D99", cursor: "not-allowed" }}>
+              ₦{Number(marketRate || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} — set by RunServ
+            </div>
+          )}
 
           <label style={labelStyle}>Your markup (%)</label>
           <input type="number" step="0.1" min="0" max="50" value={markupPct} onChange={(e) => setMarkupPct(e.target.value)} style={inputStyle} />

@@ -11,7 +11,9 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { AdminRequest } from "../middleware/admin.middleware.js";
 import { getGateway } from "../services/gateways/gateway.factory.js";
-import { fulfillVerifiedPayment } from "./payments.controller.js";// ------------------------------------------------------------------
+import { fulfillVerifiedPayment } from "./payments.controller.js";
+
+// ------------------------------------------------------------------
 // POST /admin/orgs/:orgId/payments/:paymentId/resync
 // Re-verifies a payment directly against its gateway and, if the
 // gateway confirms success, runs it through the normal fulfillment
@@ -22,12 +24,15 @@ import { fulfillVerifiedPayment } from "./payments.controller.js";// -----------
 export async function resyncPayment(req: AdminRequest, res: Response) {
   const { orgId, paymentId } = req.params;
 
-  const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+  const payment = await prisma.payment.findUnique({ where: { id: paymentId }, include: { org: true } });
   if (!payment || payment.orgId !== orgId) {
     return res.status(404).json({ error: "Payment not found in this organization" });
   }
+  if (!req.admin!.isPlatformAdmin && payment.org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Payment not found in this organization" });
+  }
 
-    if (payment.status === "SUCCESS") {
+  if (payment.status === "SUCCESS") {
     return res.json({ message: "Payment was already marked as successful — nothing to do.", alreadySynced: true });
   }
 
@@ -56,7 +61,7 @@ export async function resyncPayment(req: AdminRequest, res: Response) {
     });
 
     return res.json({ message: "Payment reconciled and marked as paid.", alreadySynced: false });
-    } catch (err: any) {
+  } catch (err: any) {
     return res.status(502).json({ error: `Could not verify with gateway: ${err.message}` });
   }
 }
@@ -68,6 +73,15 @@ export async function resyncPayment(req: AdminRequest, res: Response) {
 // same fulfillVerifiedPayment path a webhook would have — so the
 // client's dashboard, the audit log, and Payment history all stay
 // consistent with the gateway flow rather than needing a special case.
+//
+// PLATFORM-ONLY: manual settlement bypasses every gateway RunServ can
+// split a platform fee through — the client already sent money
+// straight to the tenant's own bank account, so RunServ was never in
+// the money flow and has no way to collect its cut. Restricted to the
+// PLATFORM tenant (RunServ itself, which owes itself no fee) until a
+// real fee-collection mechanism exists for agency tenants (tenant
+// wallet, charge-on-file, etc. — see IMPLEMENTATION.md, "Manual
+// settlement fee gap").
 // ------------------------------------------------------------------
 const markPaidSchema = z.object({
   paymentRequestIds: z.array(z.string()).min(1, "Select at least one item"),
@@ -78,6 +92,19 @@ export async function markPaymentsPaidManually(req: AdminRequest, res: Response)
   const { orgId } = req.params;
   const parsed = markPaidSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+
+  const org = await prisma.organization.findUnique({ where: { id: orgId } });
+  if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!req.admin!.isPlatformAdmin && org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Organization not found" });
+  }
+
+  if (!req.admin!.isPlatformAdmin) {
+    return res.status(403).json({
+      error:
+        "Manual payment settlement isn't available for agency accounts yet. Please direct your client to pay through the checkout link so the platform fee is collected automatically.",
+    });
+  }
 
   const items = await prisma.paymentRequest.findMany({
     where: { id: { in: parsed.data.paymentRequestIds }, orgId, status: { in: ["DUE", "OVERDUE", "UPCOMING"] } },
@@ -91,6 +118,7 @@ export async function markPaymentsPaidManually(req: AdminRequest, res: Response)
 
   const payment = await prisma.payment.create({
     data: {
+      tenantId: org.tenantId,
       orgId,
       gateway: "MANUAL",
       gatewayRef: reference,

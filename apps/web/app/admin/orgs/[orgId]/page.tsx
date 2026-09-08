@@ -2,11 +2,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, resyncPayment, sendMessageToOrg, markPaymentsPaid } from "../../../../lib/adminApi";
+import { getOrganization, createService, updateService, deleteService, updateOrgActive, updateOrgUserActive, resendInvite, resendReceipt, resyncPayment, sendMessageToOrg, markPaymentsPaid, getCachedTenant } from "../../../../lib/adminApi";
 import MarkdownComposer from "../../../../components/MarkdownComposer";
 import AdminBackLink from "../../../../components/AdminBackLink";
 import type { Organization, Service, OrgUser, Payment, PaymentRequest, EmailMessage, ServiceCategory, BillingCycle } from "@runserver/types";
-
+import LoadingScreen from "../../../../components/LoadingScreen";
 interface Params {
   params: { orgId: string };
 }
@@ -15,6 +15,15 @@ const CATEGORIES: ServiceCategory[] = ["API", "SERVER", "DATABASE", "DOMAIN", "S
 
 export default function AdminOrgDetailPage({ params }: Params) {
   const { orgId } = params;
+
+  // Manual settlement (bank transfer, cash, etc.) bypasses every
+  // gateway RunServ can split a platform fee through, so it's
+  // restricted server-side to the PLATFORM tenant (see
+  // markPaymentsPaidManually). Mirrored here so agency admins don't
+  // see controls that will just 403 — getCachedTenant() is a UI
+  // convenience only; the server re-checks on every request.
+  const isPlatformAdmin = getCachedTenant()?.type === "PLATFORM";
+
   const [org, setOrg] = useState<Organization & {
   services: Service[];
   users: OrgUser[];
@@ -61,7 +70,7 @@ export default function AdminOrgDetailPage({ params }: Params) {
 
   // Manual settlement (bank transfer, cash, etc.) — admin selects
   // outstanding PaymentRequests and marks them paid directly, bypassing
-  // both gateways entirely.
+  // both gateways entirely. Platform-admin only — see isPlatformAdmin above.
   const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
   const [showMarkPaid, setShowMarkPaid] = useState(false);
   const [markPaidNote, setMarkPaidNote] = useState("");
@@ -262,7 +271,7 @@ export default function AdminOrgDetailPage({ params }: Params) {
     });
   }
 
-  if (loading) return <div style={{ color: "#868D99", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Loading…</div>;
+  if (loading) return <LoadingScreen label="Loading client…" />;
   if (!org) return <div style={{ color: "#F87171", padding: 40, background: "#0F1115", minHeight: "100vh" }}>Organization not found.</div>;
 
   return (
@@ -520,11 +529,14 @@ export default function AdminOrgDetailPage({ params }: Params) {
           ))}
         </Section>
 
-        {/* Outstanding — manual settlement for payments received outside the gateways */}
+        {/* Outstanding — manual settlement for payments received outside the gateways.
+            Selection UI is platform-admin only: agency admins would just hit a 403
+            (manual settlement can't collect RunServ's platform fee, since the money
+            never touches a gateway RunServ can split — see admin.payments.controller.ts). */}
         <Section
           title="Outstanding"
           action={
-            selectedRequestIds.size > 0 && (
+            isPlatformAdmin && selectedRequestIds.size > 0 && (
               <button onClick={() => setShowMarkPaid((s) => !s)} style={smallBtnStyle}>
                 {showMarkPaid ? "Cancel" : `Mark ${selectedRequestIds.size} as paid`}
               </button>
@@ -536,25 +548,40 @@ export default function AdminOrgDetailPage({ params }: Params) {
           )}
           {org.paymentRequests.map((pr) => (
             <Row key={pr.id}>
-              <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={selectedRequestIds.has(pr.id)}
-                  onChange={() => toggleRequest(pr.id)}
-                  style={{ width: 16, height: 16, accentColor: "#169DE3" }}
-                />
+              {isPlatformAdmin ? (
+                <label style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedRequestIds.has(pr.id)}
+                    onChange={() => toggleRequest(pr.id)}
+                    style={{ width: 16, height: 16, accentColor: "#169DE3" }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{pr.service.name}</div>
+                    <div style={{ fontSize: 12, color: "#868D99" }}>
+                      {pr.periodLabel} &middot; {pr.status}
+                    </div>
+                  </div>
+                </label>
+              ) : (
                 <div>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{pr.service.name}</div>
                   <div style={{ fontSize: 12, color: "#868D99" }}>
                     {pr.periodLabel} &middot; {pr.status}
                   </div>
                 </div>
-              </label>
+              )}
               <span style={{ fontFamily: "monospace", fontSize: 14 }}>${Number(pr.amount).toFixed(2)}</span>
             </Row>
           ))}
 
-          {showMarkPaid && (
+          {!isPlatformAdmin && org.paymentRequests.length > 0 && (
+            <p style={{ color: "#868D99", fontSize: 12.5, padding: "10px 12px 6px" }}>
+              Manual settlement isn't available on agency accounts yet — send your client the checkout link so payment (and RunServ's platform fee) is collected automatically.
+            </p>
+          )}
+
+          {isPlatformAdmin && showMarkPaid && (
             <div style={{ padding: 16, background: "#0F1115", borderRadius: 10, margin: 8, display: "flex", flexDirection: "column", gap: 8 }}>
               <input
                 placeholder="Note (optional) — e.g. bank transfer ref #4521"

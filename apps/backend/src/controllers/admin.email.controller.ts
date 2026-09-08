@@ -20,6 +20,9 @@ export async function resendInvite(req: AdminRequest, res: Response) {
   if (!user || user.orgId !== orgId) {
     return res.status(404).json({ error: "User not found in this organization" });
   }
+  if (!req.admin!.isPlatformAdmin && user.org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "User not found in this organization" });
+  }
   if (!user.mustChangePassword) {
     return res.status(400).json({ error: "This user has already set their password — use password reset instead, not invite resend" });
   }
@@ -68,6 +71,9 @@ export async function resendReceipt(req: AdminRequest, res: Response) {
   });
 
   if (!payment || payment.orgId !== orgId) {
+    return res.status(404).json({ error: "Payment not found in this organization" });
+  }
+  if (!req.admin!.isPlatformAdmin && payment.org.tenantId !== req.admin!.tenantId) {
     return res.status(404).json({ error: "Payment not found in this organization" });
   }
   if (payment.status !== "SUCCESS") {
@@ -119,6 +125,9 @@ export async function sendMessageToOrg(req: AdminRequest, res: Response) {
 
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
   if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!req.admin!.isPlatformAdmin && org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Organization not found" });
+  }
 
   const recipients = recipientUserId
     ? await prisma.user.findMany({ where: { id: recipientUserId, orgId, isActive: true } })

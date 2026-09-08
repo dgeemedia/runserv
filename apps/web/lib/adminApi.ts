@@ -15,6 +15,13 @@ import type {
   Payment,
   PaymentRequest,
   EmailMessage,
+  Tenant,
+  TenantWithCounts,
+  TenantSignupRequest,
+  TenantSignupResponse,
+  ConnectFlutterwaveRequest,
+  UpdateMyTenantRequest,
+  PlatformUpdateTenantRequest,
 } from "@runserver/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -29,6 +36,19 @@ async function handle<T>(res: Response): Promise<T> {
   return res.json();
 }
 
+/**
+ * Cached copy of the logged-in admin's tenant, written on login and read
+ * synchronously by AdminNav etc. to decide whether to show platform-only
+ * nav items — avoids a network round-trip just to render the sidebar.
+ * The source of truth is always the server (every real request re-checks
+ * req.admin server-side); this is a UI convenience only.
+ */
+export function getCachedTenant(): Pick<Tenant, "id" | "name" | "slug" | "type" | "status"> | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("rs_admin_tenant");
+  return raw ? JSON.parse(raw) : null;
+}
+
 export async function adminLogin(email: string, password: string) {
   const res = await fetch(`${API_URL}/admin/auth/login`, {
     method: "POST",
@@ -37,7 +57,61 @@ export async function adminLogin(email: string, password: string) {
   });
   const data = await handle<AdminLoginResponse>(res);
   localStorage.setItem("rs_admin_token", data.token);
+  localStorage.setItem("rs_admin_tenant", JSON.stringify(data.tenant));
   return data;
+}
+
+export async function signupTenant(payload: TenantSignupRequest) {
+  const res = await fetch(`${API_URL}/tenants/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await handle<TenantSignupResponse>(res);
+  localStorage.setItem("rs_admin_token", data.token);
+  localStorage.setItem("rs_admin_tenant", JSON.stringify(data.tenant));
+  return data;
+}
+
+// ---- Tenant self-service (any admin, their own tenant) ----------
+
+export async function getMyTenant() {
+  const res = await fetch(`${API_URL}/admin/tenant`, { headers: authHeaders() });
+  return handle<{ tenant: Tenant }>(res);
+}
+
+export async function updateMyTenant(payload: UpdateMyTenantRequest) {
+  const res = await fetch(`${API_URL}/admin/tenant`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return handle<{ tenant: Tenant }>(res);
+}
+
+export async function connectFlutterwaveSubaccount(payload: ConnectFlutterwaveRequest) {
+  const res = await fetch(`${API_URL}/admin/tenant/connect-flutterwave`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return handle<{ tenant: Pick<Tenant, "id" | "status" | "flutterwaveSubaccountId"> }>(res);
+}
+
+// ---- Platform-only (RunServ staff managing every agency tenant) ----------
+
+export async function listPlatformTenants() {
+  const res = await fetch(`${API_URL}/admin/platform/tenants`, { headers: authHeaders() });
+  return handle<{ tenants: TenantWithCounts[] }>(res);
+}
+
+export async function updatePlatformTenant(tenantId: string, payload: PlatformUpdateTenantRequest) {
+  const res = await fetch(`${API_URL}/admin/platform/tenants/${tenantId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  return handle<{ tenant: Tenant }>(res);
 }
 
 export async function listOrganizations() {

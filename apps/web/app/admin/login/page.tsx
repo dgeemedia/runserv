@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { adminLogin } from "../../../lib/adminApi";
 import Logo from "../../../components/Logo";
 
@@ -49,6 +50,10 @@ export default function AdminLoginPage() {
         <button type="submit" disabled={loading} style={btnStyle}>
           {loading ? "Signing in…" : "Sign in"}
         </button>
+
+        <p style={{ fontSize: 12.5, color: "#868D99", marginTop: 16, textAlign: "center" }}>
+          New agency? <Link href="/agency-signup" style={{ color: "#169DE3", textDecoration: "none" }}>Create a workspace</Link>
+        </p>
       </form>
     </div>
   );

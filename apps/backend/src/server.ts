@@ -9,6 +9,7 @@ import paymentsRoutes from "./routes/payments.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import orgRoutes from "./routes/org.routes.js";
 import internalRoutes from "./routes/internal.routes.js";
+import tenantRoutes from "./routes/tenant.routes.js";
 import { generatePaymentRequests } from "./jobs/generatePaymentRequests.job.js";
 import { sendPaymentReminders } from "./jobs/paymentReminders.job.js";
 
@@ -56,6 +57,7 @@ app.use(
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Too many attempts, try again later" } });
 app.use("/auth/login", loginLimiter);
 app.use("/admin/auth/login", loginLimiter);
+app.use("/tenants/signup", rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: { error: "Too many signup attempts, try again later" } }));
 app.use("/auth/forgot-password", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: "Too many attempts, try again later" } }));
 app.use("/internal/jobs", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: "Too many attempts, try again later" } }));
 app.use("/webhooks/email/inbound", rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: "Too many requests" } }));
@@ -67,6 +69,7 @@ app.use(paymentsRoutes);
 app.use(adminRoutes);
 app.use(orgRoutes);
 app.use(internalRoutes);
+app.use(tenantRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`RunServ API listening on :${PORT}`));

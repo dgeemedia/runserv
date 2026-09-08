@@ -8,9 +8,14 @@ import { computeAmount } from "../lib/pricing.js";
 
 // ------------------------------------------------------------------
 // GET /admin/orgs
+// Tenant-scoped: an AGENCY admin only ever sees their own tenant's
+// clients. A PLATFORM admin (RunServ staff) can see across every
+// tenant, for support — but only when they don't pass a tenant scope
+// implicitly (they're already isolated to their own login).
 // ------------------------------------------------------------------
-export async function listOrganizations(_req: AdminRequest, res: Response) {
+export async function listOrganizations(req: AdminRequest, res: Response) {
   const orgs = await prisma.organization.findMany({
+    where: req.admin!.isPlatformAdmin ? {} : { tenantId: req.admin!.tenantId },
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { services: true, users: true } },
@@ -38,6 +43,9 @@ export async function getOrganization(req: AdminRequest, res: Response) {
     },
   });
   if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!req.admin!.isPlatformAdmin && org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Organization not found" }); // 404, not 403 — don't confirm cross-tenant existence
+  }
   return res.json({ org });
 }
 
@@ -62,12 +70,17 @@ export async function createOrganization(req: AdminRequest, res: Response) {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
   const { ownerEmail, ownerName, ...orgData } = parsed.data;
+  const tenantId = req.admin!.tenantId;
 
-  const existingSlug = await prisma.organization.findUnique({ where: { slug: orgData.slug } });
+  // Slugs are unique per tenant, not globally — two agencies can each
+  // have a client called "acme-studio" without colliding.
+  const existingSlug = await prisma.organization.findUnique({
+    where: { tenantId_slug: { tenantId, slug: orgData.slug } },
+  });
   if (existingSlug) return res.status(409).json({ error: "That slug is already taken" });
 
   const org = await prisma.organization.create({
-    data: { ...orgData, createdByAdminId: req.admin!.id },
+    data: { ...orgData, tenantId, createdByAdminId: req.admin!.id },
   });
 
   try {
@@ -105,6 +118,12 @@ const updateOrgSchema = z.object({
 export async function updateOrganization(req: AdminRequest, res: Response) {
   const parsed = updateOrgSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
+
+  const existing = await prisma.organization.findUnique({ where: { id: req.params.orgId } });
+  if (!existing) return res.status(404).json({ error: "Organization not found" });
+  if (!req.admin!.isPlatformAdmin && existing.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Organization not found" });
+  }
 
   const org = await prisma.organization.update({ where: { id: req.params.orgId }, data: parsed.data });
 
@@ -163,6 +182,9 @@ export async function createService(req: AdminRequest, res: Response) {
   const orgId = req.params.orgId;
   const org = await prisma.organization.findUnique({ where: { id: orgId } });
   if (!org) return res.status(404).json({ error: "Organization not found" });
+  if (!req.admin!.isPlatformAdmin && org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Organization not found" });
+  }
 
   const nextDueDate = new Date(parsed.data.nextDueDate);
 
@@ -243,6 +265,9 @@ export async function updateService(req: AdminRequest, res: Response) {
   if (!existing || existing.orgId !== req.params.orgId) {
     return res.status(404).json({ error: "Service not found in this organization" });
   }
+  if (!req.admin!.isPlatformAdmin && existing.org.tenantId !== req.admin!.tenantId) {
+    return res.status(404).json({ error: "Service not found in this organization" });
+  }
 
   const service = await prisma.service.update({
     where: { id: req.params.serviceId },
@@ -290,8 +315,11 @@ export async function updateOrgUser(req: AdminRequest, res: Response) {
   const parsed = updateUserSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
-  const user = await prisma.user.findUnique({ where: { id: req.params.userId } });
+  const user = await prisma.user.findUnique({ where: { id: req.params.userId }, include: { org: true } });
   if (!user || user.orgId !== req.params.orgId) {
+    return res.status(404).json({ error: "User not found in this organization" });
+  }
+  if (!req.admin!.isPlatformAdmin && user.org.tenantId !== req.admin!.tenantId) {
     return res.status(404).json({ error: "User not found in this organization" });
   }
 
@@ -317,8 +345,11 @@ export async function updateOrgUser(req: AdminRequest, res: Response) {
 export async function deleteService(req: AdminRequest, res: Response) {
   const { orgId, serviceId } = req.params;
 
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  const service = await prisma.service.findUnique({ where: { id: serviceId }, include: { org: true } });
   if (!service || service.orgId !== orgId) {
+    return res.status(404).json({ error: "Service not found in this organization" });
+  }
+  if (!req.admin!.isPlatformAdmin && service.org.tenantId !== req.admin!.tenantId) {
     return res.status(404).json({ error: "Service not found in this organization" });
   }
 
