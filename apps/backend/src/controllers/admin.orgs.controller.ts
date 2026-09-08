@@ -12,6 +12,12 @@ import { computeAmount } from "../lib/pricing.js";
 // clients. A PLATFORM admin (RunServ staff) can see across every
 // tenant, for support — but only when they don't pass a tenant scope
 // implicitly (they're already isolated to their own login).
+//
+// Includes each org's tenant (id/name/slug) so the frontend can group
+// "your clients" vs "other agencies' clients" for platform admins,
+// instead of rendering one undifferentiated flat list. Agency admins
+// only ever get their own tenant's orgs back anyway, so the extra
+// field costs them nothing.
 // ------------------------------------------------------------------
 export async function listOrganizations(req: AdminRequest, res: Response) {
   const orgs = await prisma.organization.findMany({
@@ -19,6 +25,7 @@ export async function listOrganizations(req: AdminRequest, res: Response) {
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { services: true, users: true } },
+      tenant: { select: { id: true, name: true, slug: true, type: true } },
     },
   });
   return res.json({ orgs });
@@ -26,6 +33,17 @@ export async function listOrganizations(req: AdminRequest, res: Response) {
 
 // ------------------------------------------------------------------
 // GET /admin/orgs/:orgId
+//
+// Platform admins can open any tenant's org, for support — but every
+// time they open one that ISN'T their own tenant's, it's recorded in
+// that org's audit log as "org.viewed_cross_tenant". Previously only
+// mutations were audited here; a platform admin looking at an
+// agency's client list/payments/revenue with nothing recording that
+// it happened was a real gap — if an agency ever asks "did RunServ
+// staff look at my data," this is what lets you answer honestly.
+// Viewing your OWN tenant's orgs (the normal case for both platform
+// and agency admins) is not logged — that's not cross-tenant access,
+// it'd just be noise.
 // ------------------------------------------------------------------
 export async function getOrganization(req: AdminRequest, res: Response) {
   const org = await prisma.organization.findUnique({
@@ -46,6 +64,17 @@ export async function getOrganization(req: AdminRequest, res: Response) {
   if (!req.admin!.isPlatformAdmin && org.tenantId !== req.admin!.tenantId) {
     return res.status(404).json({ error: "Organization not found" }); // 404, not 403 — don't confirm cross-tenant existence
   }
+
+  if (req.admin!.isPlatformAdmin && org.tenantId !== req.admin!.tenantId) {
+    await prisma.auditLog.create({
+      data: {
+        orgId: org.id,
+        action: "org.viewed_cross_tenant",
+        metadata: { viewedByAdmin: req.admin!.email, orgTenantId: org.tenantId },
+      },
+    });
+  }
+
   return res.json({ org });
 }
 

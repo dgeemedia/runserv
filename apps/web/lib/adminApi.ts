@@ -116,7 +116,12 @@ export async function updatePlatformTenant(tenantId: string, payload: PlatformUp
 
 export async function listOrganizations() {
   const res = await fetch(`${API_URL}/admin/orgs`, { headers: authHeaders() });
-  return handle<{ orgs: (Organization & { _count: { services: number; users: number } })[] }>(res);
+  return handle<{
+    orgs: (Organization & {
+      _count: { services: number; users: number };
+      tenant: { id: string; name: string; slug: string; type: "PLATFORM" | "AGENCY" };
+    })[];
+  }>(res);
 }
 
 export async function getOrganization(orgId: string) {

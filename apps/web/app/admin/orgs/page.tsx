@@ -3,16 +3,27 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { listOrganizations } from "../../../lib/adminApi";
+import { listOrganizations, getCachedTenant } from "../../../lib/adminApi";
 import AdminNav from "../../../components/AdminNav";
 import LoadingScreen from "../../../components/LoadingScreen";
 import type { Organization } from "@runserver/types";
 
-type OrgRow = Organization & { _count: { services: number; users: number } };
+type OrgRow = Organization & {
+  _count: { services: number; users: number };
+  tenant: { id: string; name: string; slug: string; type: "PLATFORM" | "AGENCY" };
+};
 
 export default function AdminOrgsPage() {
   const [orgs, setOrgs] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Platform admins see every tenant's orgs in one response (see
+  // listOrganizations) — group them so "your own clients" are visibly
+  // separate from other agencies' clients, rather than one
+  // undifferentiated list. Agency admins only ever get their own
+  // tenant's orgs back from the API regardless, so grouping is a
+  // no-op for them (one group, no extra headers needed).
+  const myTenantId = getCachedTenant()?.id;
 
   useEffect(() => {
     listOrganizations()
@@ -21,6 +32,20 @@ export default function AdminOrgsPage() {
   }, []);
 
   if (loading) return <LoadingScreen label="Loading clients…" />;
+
+  // Group by tenant, with the viewer's own tenant always first.
+  const groups = new Map<string, { tenant: OrgRow["tenant"]; orgs: OrgRow[] }>();
+  for (const org of orgs) {
+    const key = org.tenant.id;
+    if (!groups.has(key)) groups.set(key, { tenant: org.tenant, orgs: [] });
+    groups.get(key)!.orgs.push(org);
+  }
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+    if (a.tenant.id === myTenantId) return -1;
+    if (b.tenant.id === myTenantId) return 1;
+    return a.tenant.name.localeCompare(b.tenant.name);
+  });
+  const showGroupHeaders = sortedGroups.length > 1;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0F1115", color: "#ECEEF2", fontFamily: "system-ui, sans-serif" }}>
@@ -31,6 +56,7 @@ export default function AdminOrgsPage() {
             <h1 style={{ fontSize: 24, margin: 0, fontWeight: 700, letterSpacing: "-0.01em" }}>Client organizations</h1>
             <p style={{ color: "#868D99", fontSize: 13, margin: "4px 0 0" }}>
               {orgs.length} client{orgs.length === 1 ? "" : "s"}
+              {showGroupHeaders ? ` across ${sortedGroups.length} tenants` : ""}
             </p>
           </div>
           <Link
@@ -47,49 +73,71 @@ export default function AdminOrgsPage() {
             <p style={{ fontSize: 13.5, margin: 0 }}>Create your first one to get started.</p>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {orgs.map((org) => (
-              <Link
-                key={org.id}
-                href={`/admin/orgs/${org.id}`}
-                style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "16px 20px", textDecoration: "none", color: "#ECEEF2",
-                  background: "#171A21", border: "1px solid #282D37", borderRadius: 12,
-                  transition: "border-color 0.15s ease, background 0.15s ease",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3A6E8F"; e.currentTarget.style.background = "#1B2029"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#282D37"; e.currentTarget.style.background = "#171A21"; }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div
+          sortedGroups.map((group) => (
+            <div key={group.tenant.id} style={{ marginBottom: 28 }}>
+              {showGroupHeaders && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <h2 style={{ fontSize: 13, fontWeight: 700, margin: 0, color: "#868D99", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {group.tenant.id === myTenantId ? "Your clients" : `${group.tenant.name} (agency)`}
+                  </h2>
+                  {group.tenant.id !== myTenantId && (
+                    <span
+                      title="You're viewing another agency's clients for support purposes. This is logged."
+                      style={{
+                        fontSize: 10, fontWeight: 700, color: "#F0B429", background: "rgba(240,180,41,0.14)",
+                        padding: "2px 6px", borderRadius: 5, textTransform: "uppercase", cursor: "default",
+                      }}
+                    >
+                      Cross-tenant view
+                    </span>
+                  )}
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {group.orgs.map((org) => (
+                  <Link
+                    key={org.id}
+                    href={`/admin/orgs/${org.id}`}
                     style={{
-                      width: 38, height: 38, borderRadius: 10, background: "#0F1115",
-                      border: "1px solid #282D37", display: "flex", alignItems: "center", justifyContent: "center",
-                      fontWeight: 700, fontSize: 15, color: "#169DE3", flexShrink: 0,
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "16px 20px", textDecoration: "none", color: "#ECEEF2",
+                      background: "#171A21", border: "1px solid #282D37", borderRadius: 12,
+                      transition: "border-color 0.15s ease, background 0.15s ease",
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3A6E8F"; e.currentTarget.style.background = "#1B2029"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#282D37"; e.currentTarget.style.background = "#171A21"; }}
                   >
-                    {org.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14.5, display: "flex", alignItems: "center", gap: 8 }}>
-                      {org.name}
-                      {!org.isActive && (
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "#F87171", background: "rgba(248,113,113,0.14)", padding: "2px 6px", borderRadius: 5, textTransform: "uppercase" }}>
-                          Inactive
-                        </span>
-                      )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div
+                        style={{
+                          width: 38, height: 38, borderRadius: 10, background: "#0F1115",
+                          border: "1px solid #282D37", display: "flex", alignItems: "center", justifyContent: "center",
+                          fontWeight: 700, fontSize: 15, color: "#169DE3", flexShrink: 0,
+                        }}
+                      >
+                        {org.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 14.5, display: "flex", alignItems: "center", gap: 8 }}>
+                          {org.name}
+                          {!org.isActive && (
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#F87171", background: "rgba(248,113,113,0.14)", padding: "2px 6px", borderRadius: 5, textTransform: "uppercase" }}>
+                              Inactive
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#868D99", marginTop: 2 }}>/{org.slug} &middot; {org.preferredGateway}</div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: "#868D99", marginTop: 2 }}>/{org.slug} &middot; {org.preferredGateway}</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: "#868D99", textAlign: "right" }}>
-                  <div>{org._count.services} services</div>
-                  <div>{org._count.users} users</div>
-                </div>
-              </Link>
-            ))}
-          </div>
+                    <div style={{ fontSize: 12, color: "#868D99", textAlign: "right" }}>
+                      <div>{org._count.services} services</div>
+                      <div>{org._count.users} users</div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
