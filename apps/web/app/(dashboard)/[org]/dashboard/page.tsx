@@ -83,6 +83,8 @@ export default function DashboardPage({ params }: Params) {
 
   const dueCount = useMemo(() => items.filter((i) => i.status === "DUE" || i.status === "OVERDUE").length, [items]);
   const overdueCount = useMemo(() => items.filter((i) => i.status === "OVERDUE").length, [items]);
+  const totalPaid = useMemo(() => history.reduce((sum, h) => sum + Number(h.amount), 0), [history]);
+  const progressPct = items.length === 0 ? 0 : Math.round((selected.size / items.length) * 100);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -139,10 +141,15 @@ export default function DashboardPage({ params }: Params) {
   }
 
   return (
-    <div style={{ color: "#ECEEF2", fontFamily: "system-ui, sans-serif", minHeight: "100vh", background: "#0F1115" }}>
+    <div style={{ color: "#ECEEF2", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", minHeight: "100vh", background: "#0F1115" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        .rs-item:hover { border-color: #3A404C !important; }
+        @keyframes rs-bar-in { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+      `}</style>
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 20px 180px" }}>
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, gap: 12, flexWrap: "wrap" }}>
           <Logo variant="dark" height={22} />
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <CurrencyToggle currency={currency} onChange={setCurrency} />
@@ -159,12 +166,14 @@ export default function DashboardPage({ params }: Params) {
         {items.length > 0 && (
           <div
             style={{
-              display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap",
+              display: "grid", gap: 10, marginBottom: 24,
+              gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
             }}
           >
-            <SummaryPill label="Items" value={items.length} />
-            <SummaryPill label="Due now" value={dueCount} accent={dueCount > 0 ? "#169DE3" : undefined} />
-            {overdueCount > 0 && <SummaryPill label="Overdue" value={overdueCount} accent="#F87171" />}
+            <SummaryPill label="Items" value={items.length} icon="▤" />
+            <SummaryPill label="Due now" value={dueCount} icon="◔" accent={dueCount > 0 ? "#169DE3" : undefined} />
+            {overdueCount > 0 && <SummaryPill label="Overdue" value={overdueCount} icon="!" accent="#F87171" />}
+            <SummaryPill label="Paid to date" value={`$${totalPaid.toFixed(0)}`} icon="✓" accent="#4ADE80" isText />
           </div>
         )}
 
@@ -172,11 +181,20 @@ export default function DashboardPage({ params }: Params) {
           <div
             style={{
               background: "#171A21", border: "1px solid #282D37", borderRadius: 14,
-              padding: "40px 24px", textAlign: "center", color: "#868D99",
+              padding: "48px 24px", textAlign: "center", color: "#868D99",
             }}
           >
-            <div style={{ fontSize: 15, color: "#ECEEF2", fontWeight: 600, marginBottom: 6 }}>No payment requests yet</div>
-            <p style={{ fontSize: 13.5, margin: 0, lineHeight: 1.6 }}>
+            <div
+              style={{
+                width: 44, height: 44, borderRadius: 12, background: "#0F1115", border: "1px solid #282D37",
+                display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+                fontSize: 18, color: "#4ADE80",
+              }}
+            >
+              ✓
+            </div>
+            <div style={{ fontSize: 15, color: "#ECEEF2", fontWeight: 600, marginBottom: 6 }}>You're all caught up</div>
+            <p style={{ fontSize: 13.5, margin: 0, lineHeight: 1.6, maxWidth: 320, marginLeft: "auto", marginRight: "auto" }}>
               Nothing's due right now — new items will show up here as they're added to your account.
             </p>
           </div>
@@ -195,6 +213,7 @@ export default function DashboardPage({ params }: Params) {
                 return (
                   <label
                     key={item.id}
+                    className="rs-item"
                     style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
                       padding: "16px 18px", background: isSelected ? "#1B2029" : "#171A21",
@@ -302,31 +321,42 @@ export default function DashboardPage({ params }: Params) {
             borderTop: "1px solid #282D37", padding: 16,
           }}
         >
-          <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: 11, color: "#868D99", marginBottom: 2 }}>
-                {selected.size} of {items.length} selected
-              </div>
-              <div style={{ fontFamily: "monospace", fontSize: 22, fontWeight: 700 }}>
-                {currency === "USD" ? `$${displayTotal.toFixed(2)}` : `₦${displayTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-              </div>
-              {currency === "NGN" && (
-                <div style={{ fontSize: 11, color: "#868D99" }}>≈ ${totalUsd.toFixed(2)} USD</div>
-              )}
+          <div style={{ maxWidth: 760, margin: "0 auto" }}>
+            <div style={{ height: 3, background: "#21252E", borderRadius: 2, marginBottom: 14, overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%", width: `${progressPct}%`, background: "#169DE3", borderRadius: 2,
+                  transformOrigin: "left", animation: "rs-bar-in 0.4s ease",
+                  transition: "width 0.25s ease",
+                }}
+              />
             </div>
-            <button
-              onClick={pay}
-              disabled={paying || selected.size === 0}
-              style={{
-                background: selected.size === 0 ? "#282D37" : "#169DE3",
-                color: selected.size === 0 ? "#868D99" : "#FFFFFF",
-                border: "none", borderRadius: 10, padding: "13px 24px", fontWeight: 600,
-                fontSize: 14.5, cursor: selected.size === 0 ? "default" : "pointer",
-                transition: "background 0.15s ease",
-              }}
-            >
-              {paying ? "Redirecting…" : "Proceed to checkout"}
-            </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 11, color: "#868D99", marginBottom: 2 }}>
+                  {selected.size} of {items.length} selected
+                </div>
+                <div className="mono" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 700 }}>
+                  {currency === "USD" ? `$${displayTotal.toFixed(2)}` : `₦${displayTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                </div>
+                {currency === "NGN" && (
+                  <div style={{ fontSize: 11, color: "#868D99" }}>≈ ${totalUsd.toFixed(2)} USD</div>
+                )}
+              </div>
+              <button
+                onClick={pay}
+                disabled={paying || selected.size === 0}
+                style={{
+                  background: selected.size === 0 ? "#282D37" : "#169DE3",
+                  color: selected.size === 0 ? "#868D99" : "#FFFFFF",
+                  border: "none", borderRadius: 10, padding: "13px 24px", fontWeight: 600,
+                  fontSize: 14.5, cursor: selected.size === 0 ? "default" : "pointer",
+                  transition: "background 0.15s ease",
+                }}
+              >
+                {paying ? "Redirecting…" : "Proceed to checkout"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -336,22 +366,32 @@ export default function DashboardPage({ params }: Params) {
 
 function StatusScreen({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#ECEEF2", fontFamily: "system-ui, sans-serif", background: "#0F1115", textAlign: "center", padding: 20 }}>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", color: "#ECEEF2", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", background: "#0F1115", textAlign: "center", padding: 20 }}>
       {children}
     </div>
   );
 }
 
-function SummaryPill({ label, value, accent }: { label: string; value: number; accent?: string }) {
+function SummaryPill({ label, value, accent, icon, isText }: { label: string; value: number | string; accent?: string; icon?: string; isText?: boolean }) {
   return (
     <div
       style={{
-        display: "flex", alignItems: "baseline", gap: 6, padding: "8px 14px",
+        display: "flex", flexDirection: "column", gap: 6, padding: "12px 14px",
         background: "#171A21", border: "1px solid #282D37", borderRadius: 10,
       }}
     >
-      <span style={{ fontFamily: "monospace", fontSize: 15, fontWeight: 700, color: accent ?? "#ECEEF2" }}>{value}</span>
-      <span style={{ fontSize: 12, color: "#868D99" }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 11.5, color: "#868D99" }}>{label}</span>
+        {icon && <span style={{ fontSize: 11, color: accent ?? "#868D99" }}>{icon}</span>}
+      </div>
+      <span
+        style={{
+          fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: accent ?? "#ECEEF2",
+          fontSize: isText ? 16 : 19,
+        }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
