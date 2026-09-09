@@ -294,3 +294,38 @@ function escapeHtml(str: string) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+// ------------------------------------------------------------------
+// 7. Contact enquiry notification — sent to RunServ (not a client) when
+// someone submits the public contact form on the marketing site. Skips
+// the shared `layout()` wrapper deliberately: that's the branded shell
+// meant for outward emails to clients, and this is an internal alert.
+// Uses replyTo so hitting "reply" in the inbox goes straight back to
+// the person who submitted the form.
+// ------------------------------------------------------------------
+export async function sendContactEnquiryEmail(params: {
+  name: string;
+  email: string;
+  company?: string;
+  topic: string;
+  message: string;
+}) {
+  const notifyTo = process.env.CONTACT_NOTIFY_EMAIL || "support@runserv.org";
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; font-size:14px; color:#333; line-height:1.6;">
+      <p><strong>Name:</strong> ${escapeHtml(params.name)}</p>
+      <p><strong>Email:</strong> ${escapeHtml(params.email)}</p>
+      ${params.company ? `<p><strong>Company:</strong> ${escapeHtml(params.company)}</p>` : ""}
+      <p><strong>Topic:</strong> ${escapeHtml(params.topic)}</p>
+      <p><strong>Message:</strong><br/>${escapeHtml(params.message).replace(/\n/g, "<br/>")}</p>
+    </div>`;
+
+  return txEmailApi.sendTransacEmail({
+    sender: SENDER,
+    to: [{ email: notifyTo }],
+    replyTo: { email: params.email, name: params.name },
+    subject: `New enquiry — ${params.topic}`,
+    htmlContent: html,
+  });
+}

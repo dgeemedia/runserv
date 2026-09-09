@@ -124,3 +124,23 @@ export async function createCheckout(orgId: string, paymentRequestIds: string[],
   if (!res.ok) throw new Error((await res.json()).error || "Checkout failed");
   return res.json() as Promise<{ checkoutUrl: string; reference: string; total: number; currency: string }>;
 }
+
+// Public — the marketing site's contact form. No auth headers: this is
+// the same unauthenticated shape as login/forgotPassword above.
+export async function submitContactEnquiry(data: {
+  name: string;
+  email: string;
+  company?: string;
+  topic: string;
+  message: string;
+  hp_website?: string; // honeypot — always empty for real visitors
+}) {
+  const res = await fetch(`${API_URL}/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Couldn't send your message. Please try again.");
+  return json as { ok: true };
+}

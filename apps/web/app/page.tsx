@@ -4,6 +4,7 @@ import MarketingNav from "../components/MarketingNav";
 import PaymentPreviewCard from "../components/PaymentPreviewCard";
 import { SocialIcon } from "../components/SocialIcons";
 import { SOCIAL_LINKS } from "../lib/social";
+import { OFFICES } from "../lib/offices";
 import { SITE_URL } from "../lib/seo";
 
 export const metadata = {
@@ -330,19 +331,30 @@ export default function MarketingPage() {
             </p>
           </div>
 
-          <div style={{ fontSize: 13, color: "#868D99", lineHeight: 1.7 }}>
-            <div style={{ fontSize: 11, letterSpacing: "0.06em", color: "#868D99", textTransform: "uppercase", marginBottom: 6, opacity: 0.8 }}>
-              Contact
-            </div>
-            <div>52 Millbrook Road, Edmonton</div>
-            <div>London, N9 7HX</div>
-            <a href="tel:+442035904976" style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
-              +44 203 590 4976
-            </a>
-            <a href="mailto:support@runserv.org" style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
-              support@runserv.org
-            </a>
+          <div style={{ display: "flex", gap: 40, flexWrap: "wrap" }}>
+            {OFFICES.map((office) => (
+              <div key={office.region} style={{ fontSize: 13, color: "#868D99", lineHeight: 1.7, minWidth: 200 }}>
+                <div style={{ fontSize: 11, letterSpacing: "0.06em", color: "#868D99", textTransform: "uppercase", marginBottom: 6, opacity: 0.8 }}>
+                  {office.region}
+                </div>
+                {office.lines.map((line) => (
+                  <div key={line}>{line}</div>
+                ))}
+                <a href={`tel:${office.tel}`} style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
+                  {office.phone}
+                </a>
+                <a href={`mailto:${office.email}`} style={{ color: "#868D99", textDecoration: "none", display: "block" }}>
+                  {office.email}
+                </a>
+              </div>
+            ))}
           </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <Link href="/contact" style={{ fontSize: 13.5, color: "#169DE3", textDecoration: "none", fontWeight: 500 }}>
+            Have a question? Send us a message →
+          </Link>
         </div>
 
         <div style={{ borderTop: "1px solid #282D37", paddingTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>

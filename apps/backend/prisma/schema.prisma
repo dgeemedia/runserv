@@ -439,3 +439,23 @@ model EmailMessage {
   @@index([orgId, createdAt])
   @@map("email_messages")
 }
+
+// ------------------------------------------------------------------
+// Public marketing-site contact form submissions. Deliberately not
+// tied to a Tenant/Organization — these are prospects, not existing
+// customers, so there's no tenant to scope them to. Visible only to
+// platform (RunServ staff) admins, see contact.routes.ts.
+// ------------------------------------------------------------------
+model ContactEnquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  company   String?
+  topic     String   @default("General enquiry")
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("contact_enquiries")
+}
