@@ -1,10 +1,10 @@
 // apps/backend/src/controllers/contact.controller.ts
 import { Request, Response } from "express";
+import { CONTACT_TOPICS, type ContactTopic, type SubmitContactEnquiryResponse, type ListContactEnquiriesResponse, type UpdateContactEnquiryResponse } from "@runserver/types";
 import { prisma } from "../lib/prisma.js";
 import { AdminRequest } from "../middleware/admin.middleware.js";
 import { sendContactEnquiryEmail } from "../services/email.service.js";
 
-const TOPICS = ["General enquiry", "Agency sign-up", "Support", "Partnership / press"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ------------------------------------------------------------------
@@ -21,7 +21,7 @@ export async function submitContactEnquiry(req: Request, res: Response) {
   // Report success without actually sending anything, so the bot doesn't
   // learn its submission was rejected and try to adapt.
   if (hp_website) {
-    return res.json({ ok: true });
+    return res.json({ ok: true } satisfies SubmitContactEnquiryResponse);
   }
 
   if (!name || !email || !message) {
@@ -34,7 +34,7 @@ export async function submitContactEnquiry(req: Request, res: Response) {
     return res.status(400).json({ error: "Message is too short." });
   }
 
-  const safeTopic = typeof topic === "string" && TOPICS.includes(topic) ? topic : TOPICS[0];
+  const safeTopic = typeof topic === "string" && CONTACT_TOPICS.includes(topic as ContactTopic) ? topic : CONTACT_TOPICS[0];
 
   const enquiry = await prisma.contactEnquiry.create({
     data: {
@@ -61,7 +61,7 @@ export async function submitContactEnquiry(req: Request, res: Response) {
     console.error("[contact] Failed to send notification email:", err);
   }
 
-  return res.json({ ok: true });
+  return res.json({ ok: true } satisfies SubmitContactEnquiryResponse);
 }
 
 // ------------------------------------------------------------------
@@ -70,11 +70,27 @@ export async function submitContactEnquiry(req: Request, res: Response) {
 // not scoped to any tenant/agency, so no tenant admin should see them.
 // ------------------------------------------------------------------
 export async function listContactEnquiries(req: AdminRequest, res: Response) {
-  const enquiries = await prisma.contactEnquiry.findMany({
+  const rows = await prisma.contactEnquiry.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
   });
-  return res.json({ enquiries });
+
+  // Dates go over the wire as ISO strings, same convention as every
+  // other list endpoint (see admin.revenue.controller.ts) — Prisma
+  // returns real Date objects, the shared ContactEnquiry type expects
+  // `createdAt: string`.
+  const enquiries: ListContactEnquiriesResponse["enquiries"] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    company: r.company,
+    topic: r.topic as ContactTopic,
+    message: r.message,
+    handled: r.handled,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  return res.json({ enquiries } satisfies ListContactEnquiriesResponse);
 }
 
 // ------------------------------------------------------------------
@@ -86,10 +102,21 @@ export async function updateContactEnquiry(req: AdminRequest, res: Response) {
   const { id } = req.params;
   const { handled } = req.body ?? {};
 
-  const enquiry = await prisma.contactEnquiry.update({
+  const row = await prisma.contactEnquiry.update({
     where: { id },
     data: { handled: Boolean(handled) },
   });
 
-  return res.json({ enquiry });
+  const enquiry: UpdateContactEnquiryResponse["enquiry"] = {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    company: row.company,
+    topic: row.topic as ContactTopic,
+    message: row.message,
+    handled: row.handled,
+    createdAt: row.createdAt.toISOString(),
+  };
+
+  return res.json({ enquiry } satisfies UpdateContactEnquiryResponse);
 }

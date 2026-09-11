@@ -337,6 +337,11 @@ export default function MarketingPage() {
                 <div style={{ fontSize: 11, letterSpacing: "0.06em", color: "#868D99", textTransform: "uppercase", marginBottom: 6, opacity: 0.8 }}>
                   {office.region}
                 </div>
+                {office.operatedBy && (
+                  <div style={{ fontSize: 11.5, color: "#5C636E", marginBottom: 6, marginTop: -2 }}>
+                    Operated by {office.operatedBy}
+                  </div>
+                )}
                 {office.lines.map((line) => (
                   <div key={line}>{line}</div>
                 ))}

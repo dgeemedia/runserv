@@ -8,6 +8,7 @@
 export const OFFICES = [
   {
     region: "UK, US and Europe Office",
+    operatedBy: undefined as string | undefined,
     lines: ["52 Millbrook Road, Edmonton", "London, N9 7HX"],
     tel: "+442035904976",
     phone: "+44 203 590 4976",
@@ -19,6 +20,7 @@ export const OFFICES = [
   },
   {
     region: "Nigeria and West Africa Office",
+    operatedBy: "Elorge Technologies Limited" as string | undefined,
     lines: ["Plot 35, Central Business District, OPIC", "Agbara Industrial Estate, Lagos-Ogun Corridor", "Nigeria"],
     tel: "+2348065104250",
     phone: "+234 806 5104250",

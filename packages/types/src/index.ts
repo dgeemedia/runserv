@@ -40,6 +40,19 @@ export type TenantType = "PLATFORM" | "AGENCY";
 export type TenantFeeModel = "TRANSACTION_PCT" | "FX_SPREAD_SHARE" | "FLAT_SUBSCRIPTION";
 export type TenantStatus = "PENDING_ONBOARDING" | "ACTIVE" | "SUSPENDED";
 
+// ContactEnquiry.topic is a plain String (with a default) in Prisma, not
+// a database enum — the fixed option list lives here instead, once,
+// so the marketing site's form and the backend's validation can't drift
+// out of sync the way two independently-typed string arrays eventually would.
+export type ContactTopic = "General enquiry" | "Agency sign-up" | "Support" | "Partnership / press";
+
+export const CONTACT_TOPICS: ContactTopic[] = [
+  "General enquiry",
+  "Agency sign-up",
+  "Support",
+  "Partnership / press",
+];
+
 // ---- Core entities -----------------------------------------
 
 export interface Organization {
@@ -196,6 +209,22 @@ export interface PlatformUpdateTenantRequest {
   isActive?: boolean;
 }
 
+// ---- Contact enquiries (marketing site) -----------------------
+// Deliberately not tied to a Tenant/Organization — submitted by
+// prospects, not existing customers. Visible only to platform
+// (RunServ staff) admins.
+
+export interface ContactEnquiry {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  topic: ContactTopic;
+  message: string;
+  handled: boolean;
+  createdAt: string;
+}
+
 // ---- Client-facing API DTOs ---------------------------------
 
 export interface LoginRequest {
@@ -250,6 +279,21 @@ export interface RevenueSummary {
     paidAt: string | null;
     receiptNumber: string | null;
   }>;
+}
+
+// Public — the marketing site's contact form. No auth, same tier as
+// login/forgotPassword above.
+export interface SubmitContactEnquiryRequest {
+  name: string;
+  email: string;
+  company?: string;
+  topic: ContactTopic;
+  message: string;
+  hp_website?: string; // honeypot — always empty for real visitors; non-empty means silently drop the submission
+}
+
+export interface SubmitContactEnquiryResponse {
+  ok: true;
 }
 
 // ---- Admin-facing API DTOs -----------------------------------
@@ -317,4 +361,18 @@ export interface MarkPaymentsPaidRequest {
 export interface MarkPaymentsPaidResponse {
   message: string;
   paymentId: string;
+}
+
+// Platform (RunServ staff) only — these are leads for RunServ itself,
+// not scoped to any tenant/agency. See ContactEnquiry above.
+export interface ListContactEnquiriesResponse {
+  enquiries: ContactEnquiry[];
+}
+
+export interface UpdateContactEnquiryRequest {
+  handled: boolean;
+}
+
+export interface UpdateContactEnquiryResponse {
+  enquiry: ContactEnquiry;
 }

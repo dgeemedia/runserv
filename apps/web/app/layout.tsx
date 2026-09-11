@@ -75,6 +75,7 @@ const organizationJsonLd = {
   location: OFFICES.map((o) => ({
     "@type": "Place",
     name: o.region,
+    ...(o.operatedBy ? { description: `Operated by ${o.operatedBy}` } : {}),
     address: {
       "@type": "PostalAddress",
       streetAddress: o.streetAddress,

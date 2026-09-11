@@ -1,4 +1,6 @@
 // apps/web/lib/api.ts
+import type { SubmitContactEnquiryRequest, SubmitContactEnquiryResponse } from "@runserver/types";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 function authHeaders() {
@@ -127,14 +129,7 @@ export async function createCheckout(orgId: string, paymentRequestIds: string[],
 
 // Public — the marketing site's contact form. No auth headers: this is
 // the same unauthenticated shape as login/forgotPassword above.
-export async function submitContactEnquiry(data: {
-  name: string;
-  email: string;
-  company?: string;
-  topic: string;
-  message: string;
-  hp_website?: string; // honeypot — always empty for real visitors
-}) {
+export async function submitContactEnquiry(data: SubmitContactEnquiryRequest): Promise<SubmitContactEnquiryResponse> {
   const res = await fetch(`${API_URL}/contact`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -142,5 +137,5 @@ export async function submitContactEnquiry(data: {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error || "Couldn't send your message. Please try again.");
-  return json as { ok: true };
+  return json as SubmitContactEnquiryResponse;
 }

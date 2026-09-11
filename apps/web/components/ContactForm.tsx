@@ -2,9 +2,10 @@
 "use client";
 
 import { useState } from "react";
+import { CONTACT_TOPICS } from "@runserver/types";
 import { submitContactEnquiry } from "../lib/api";
 
-const TOPICS = ["General enquiry", "Agency sign-up", "Support", "Partnership / press"];
+const TOPICS = CONTACT_TOPICS;
 
 const inputStyle: React.CSSProperties = {
   width: "100%", background: "#0F1115", border: "1px solid #282D37", borderRadius: 8,
