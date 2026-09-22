@@ -144,6 +144,28 @@ export default function AdminOrgDetailPage({ params }: Params) {
     [groupedServices, serviceFilter]
   );
 
+  // Per-service payment badge — org.paymentRequests only ever contains
+  // DUE/OVERDUE/UPCOMING requests (PAID ones are excluded server-side),
+  // so a service with no entry here has nothing pending right now.
+  // Lets each card show its own "Due"/"Overdue"/"Paid" state instead of
+  // only being visible by cross-referencing the Outstanding section.
+  const servicePaymentStatus = useMemo(() => {
+    const priority: Record<string, number> = { OVERDUE: 3, DUE: 2, UPCOMING: 1 };
+    const map = new Map<string, "OVERDUE" | "DUE" | "UPCOMING">();
+    for (const pr of org?.paymentRequests ?? []) {
+      const existing = map.get(pr.serviceId);
+      if (!existing || priority[pr.status] > priority[existing]) {
+        map.set(pr.serviceId, pr.status as "OVERDUE" | "DUE" | "UPCOMING");
+      }
+    }
+    return map;
+  }, [org?.paymentRequests]);
+
+  const activeServicesDueCount = useMemo(
+    () => (org?.services ?? []).filter((s) => s.status === "ACTIVE" && servicePaymentStatus.has(s.id)).length,
+    [org?.services, servicePaymentStatus]
+  );
+
   const filteredOutstanding = useMemo(() => {
     const all = org?.paymentRequests ?? [];
     if (outstandingFilter === "ALL") return all;
@@ -579,7 +601,7 @@ export default function AdminOrgDetailPage({ params }: Params) {
           )}
 
           {org.services.length > 0 && (
-            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
               {(["ALL", "ACTIVE", "PAUSED", "CANCELLED"] as const).map((f) => {
                 const count = f === "ALL" ? org.services.length : groupedServices.find((g) => g.status === f)?.services.length ?? 0;
                 return (
@@ -589,6 +611,17 @@ export default function AdminOrgDetailPage({ params }: Params) {
                 );
               })}
             </div>
+          )}
+
+          {/* "Active" only means the subscription is still running — it says
+              nothing about whether this period's invoice is paid, so spell
+              that out here and badge it per-card below (see servicePaymentStatus). */}
+          {activeServicesDueCount > 0 && (
+            <p style={{ color: "#868D99", fontSize: 12, margin: "0 0 16px" }}>
+              {activeServicesDueCount} of {groupedServices.find((g) => g.status === "ACTIVE")?.services.length ?? 0} active
+              services {activeServicesDueCount === 1 ? "has" : "have"} a payment due — see badges below, or the Outstanding
+              section further down.
+            </p>
           )}
 
           {org.services.length > 0 && visibleServiceGroups.every((g) => g.services.length === 0) && (
@@ -659,7 +692,10 @@ export default function AdminOrgDetailPage({ params }: Params) {
                         <Card>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                                <PaymentBadge status={servicePaymentStatus.get(s.id)} showPaidWhenActive={s.status === "ACTIVE"} />
+                              </div>
                               <div style={{ fontSize: 12, color: "#868D99" }}>
                                 {s.category} &middot; {s.billingCycle === "YEARLY" ? "Yearly" : "Monthly"} &middot; next due {new Date(s.nextDueDate).toLocaleDateString()}
                               </div>
@@ -887,6 +923,29 @@ const PAYMENT_REQUEST_STATUS_COLOR: Record<string, string> = {
 
 function StatusTag({ status }: { status: string }) {
   return <span style={{ color: PAYMENT_REQUEST_STATUS_COLOR[status] ?? "#868D99", fontWeight: 600 }}>{status}</span>;
+}
+
+// Small per-service badge showing whether the current period is paid.
+// `status` comes from servicePaymentStatus — undefined means there's no
+// pending DUE/OVERDUE/UPCOMING request for this service right now.
+// Only ACTIVE services get a default "Paid" badge in that case: for a
+// paused/cancelled service, "nothing pending" isn't really "paid", it's
+// just not being billed, so we stay silent rather than imply it settled.
+function PaymentBadge({ status, showPaidWhenActive }: { status?: "OVERDUE" | "DUE" | "UPCOMING"; showPaidWhenActive: boolean }) {
+  if (!status) {
+    if (!showPaidWhenActive) return null;
+    return (
+      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, textTransform: "uppercase", background: "rgba(74,222,128,0.14)", color: "#4ADE80" }}>
+        Paid
+      </span>
+    );
+  }
+  const color = PAYMENT_REQUEST_STATUS_COLOR[status] ?? "#868D99";
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 5, textTransform: "uppercase", background: `${color}24`, color }}>
+      {status.charAt(0) + status.slice(1).toLowerCase()}
+    </span>
+  );
 }
 
 const SERVICE_STATUS_DOT: Record<"ACTIVE" | "PAUSED" | "CANCELLED", string> = {
