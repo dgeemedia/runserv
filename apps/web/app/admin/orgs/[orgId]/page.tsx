@@ -96,6 +96,10 @@ export default function AdminOrgDetailPage({ params }: Params) {
   // upcoming items doesn't bury the ones actually due.
   const [outstandingFilter, setOutstandingFilter] = useState<"ALL" | "OVERDUE" | "DUE" | "UPCOMING">("ALL");
 
+  // Services — toggle which status group(s) show, so a client with a
+  // long service history isn't stuck scrolling past everything at once.
+  const [serviceFilter, setServiceFilter] = useState<"ALL" | "ACTIVE" | "PAUSED" | "CANCELLED">("ALL");
+
   // Recent payments — filter by status, and a page size for the same
   // "don't roll down forever" reason as Conversation above.
   const [paymentFilter, setPaymentFilter] = useState<"ALL" | "SUCCESS" | "PENDING" | "FAILED">("ALL");
@@ -124,6 +128,9 @@ export default function AdminOrgDetailPage({ params }: Params) {
 
   const visibleMessages = filteredMessages.slice(0, convVisibleCount);
 
+  // Always computed across every status, regardless of the active
+  // filter, so chip counts (e.g. "Paused · 2") stay accurate even
+  // while a different status is selected.
   const groupedServices = useMemo(() => {
     const all = org?.services ?? [];
     return SERVICE_SECTIONS.map((section) => ({
@@ -131,6 +138,11 @@ export default function AdminOrgDetailPage({ params }: Params) {
       services: all.filter((s) => s.status === section.status),
     }));
   }, [org?.services]);
+
+  const visibleServiceGroups = useMemo(
+    () => (serviceFilter === "ALL" ? groupedServices : groupedServices.filter((g) => g.status === serviceFilter)),
+    [groupedServices, serviceFilter]
+  );
 
   const filteredOutstanding = useMemo(() => {
     const all = org?.paymentRequests ?? [];
@@ -566,7 +578,24 @@ export default function AdminOrgDetailPage({ params }: Params) {
             <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>No services yet.</p>
           )}
 
-          {groupedServices.map((group) =>
+          {org.services.length > 0 && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+              {(["ALL", "ACTIVE", "PAUSED", "CANCELLED"] as const).map((f) => {
+                const count = f === "ALL" ? org.services.length : groupedServices.find((g) => g.status === f)?.services.length ?? 0;
+                return (
+                  <FilterChip key={f} active={serviceFilter === f} onClick={() => setServiceFilter(f)}>
+                    {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()} &middot; {count}
+                  </FilterChip>
+                );
+              })}
+            </div>
+          )}
+
+          {org.services.length > 0 && visibleServiceGroups.every((g) => g.services.length === 0) && (
+            <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>No services in this group.</p>
+          )}
+
+          {visibleServiceGroups.map((group) =>
             group.services.length === 0 ? null : (
               <div key={group.status} style={{ marginBottom: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
