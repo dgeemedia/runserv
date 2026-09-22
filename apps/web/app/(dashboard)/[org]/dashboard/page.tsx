@@ -43,6 +43,16 @@ export default function DashboardPage({ params }: Params) {
   const [currency, setCurrency] = useState<"USD" | "NGN">("USD");
   const [fxRate, setFxRate] = useState<{ effectiveRate: string } | null>(null);
 
+  // Payment requests — filter by status so a long list of upcoming
+  // items doesn't bury what's actually due right now.
+  const [requestFilter, setRequestFilter] = useState<"ALL" | "OVERDUE" | "DUE" | "UPCOMING">("ALL");
+
+  // Payment history — filter by service + a time range, and a page
+  // size so it doesn't just roll down forever as more payments land.
+  const [historyService, setHistoryService] = useState<string>("ALL");
+  const [historyRange, setHistoryRange] = useState<"ALL" | "30" | "90" | "365">("ALL");
+  const [historyVisibleCount, setHistoryVisibleCount] = useState(6);
+
   useEffect(() => {
     const token = localStorage.getItem("rs_token");
     if (!token) {
@@ -86,6 +96,28 @@ export default function DashboardPage({ params }: Params) {
   const totalPaid = useMemo(() => history.reduce((sum, h) => sum + Number(h.amount), 0), [history]);
   const progressPct = items.length === 0 ? 0 : Math.round((selected.size / items.length) * 100);
 
+  const visibleItems = useMemo(() => {
+    if (requestFilter === "ALL") return items;
+    return items.filter((i) => i.status === requestFilter);
+  }, [items, requestFilter]);
+
+  const historyServiceOptions = useMemo(
+    () => Array.from(new Set(history.map((h) => h.service.name))).sort(),
+    [history]
+  );
+
+  const filteredHistory = useMemo(() => {
+    const cutoffDays = historyRange === "ALL" ? null : Number(historyRange);
+    const cutoff = cutoffDays ? Date.now() - cutoffDays * 24 * 60 * 60 * 1000 : null;
+    return history.filter((h) => {
+      if (historyService !== "ALL" && h.service.name !== historyService) return false;
+      if (cutoff && h.payment?.paidAt && new Date(h.payment.paidAt).getTime() < cutoff) return false;
+      return true;
+    });
+  }, [history, historyService, historyRange]);
+
+  const visibleHistory = filteredHistory.slice(0, historyVisibleCount);
+
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -95,7 +127,16 @@ export default function DashboardPage({ params }: Params) {
   }
 
   function toggleAll() {
-    setSelected((prev) => (prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))));
+    setSelected((prev) => {
+      const allVisibleSelected = visibleItems.every((i) => prev.has(i.id));
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        visibleItems.forEach((i) => next.delete(i.id));
+      } else {
+        visibleItems.forEach((i) => next.add(i.id));
+      }
+      return next;
+    });
   }
 
   async function pay() {
@@ -200,14 +241,25 @@ export default function DashboardPage({ params }: Params) {
           </div>
         ) : (
           <>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {(["ALL", "OVERDUE", "DUE", "UPCOMING"] as const).map((f) => (
+                  <RequestFilterChip key={f} active={requestFilter === f} onClick={() => setRequestFilter(f)}>
+                    {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
+                  </RequestFilterChip>
+                ))}
+              </div>
               <button onClick={toggleAll} style={linkBtnStyle}>
-                {selected.size === items.length ? "Deselect all" : "Select all"}
+                {visibleItems.length > 0 && visibleItems.every((i) => selected.has(i.id)) ? "Deselect all" : "Select all"}
               </button>
             </div>
 
+            {visibleItems.length === 0 && (
+              <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>Nothing matches this filter.</p>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 const isSelected = selected.has(item.id);
                 const badge = STATUS_STYLES[item.status] ?? STATUS_STYLES.UPCOMING;
                 return (
@@ -269,12 +321,39 @@ export default function DashboardPage({ params }: Params) {
                     </>
         )}
 
-        {/* Payment history — items already paid, whether via gateway or a manual settlement */}
+        {/* Payment history — items already paid, whether via gateway or a manual settlement.
+            Filterable by service and time range, with a page size so it doesn't
+            just roll down forever as more payments accumulate. */}
         {history.length > 0 && (
           <div style={{ marginTop: 32 }}>
             <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 10px" }}>Payment history</h2>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+              {historyServiceOptions.length > 1 && (
+                <select
+                  value={historyService}
+                  onChange={(e) => { setHistoryService(e.target.value); setHistoryVisibleCount(6); }}
+                  style={historySelectStyle}
+                >
+                  <option value="ALL">All services</option>
+                  {historyServiceOptions.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              )}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {(["30", "90", "365", "ALL"] as const).map((r) => (
+                  <RequestFilterChip key={r} active={historyRange === r} onClick={() => { setHistoryRange(r); setHistoryVisibleCount(6); }}>
+                    {r === "ALL" ? "All time" : `Last ${r}d`}
+                  </RequestFilterChip>
+                ))}
+              </div>
+            </div>
+
+            {filteredHistory.length === 0 && (
+              <p style={{ color: "#868D99", fontSize: 13, padding: "8px 4px" }}>No payments match this filter.</p>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {history.map((h) => (
+              {visibleHistory.map((h) => (
                 <div
                   key={h.id}
                   style={{
@@ -310,6 +389,12 @@ export default function DashboardPage({ params }: Params) {
                 </div>
               ))}
             </div>
+
+            {filteredHistory.length > historyVisibleCount && (
+              <button onClick={() => setHistoryVisibleCount((c) => c + 6)} style={showMoreBtnStyle}>
+                Show more ({filteredHistory.length - historyVisibleCount} left)
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -417,6 +502,22 @@ function CurrencyToggle({ currency, onChange }: { currency: "USD" | "NGN"; onCha
   );
 }
 
+function RequestFilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      type="button"
+      style={{
+        padding: "6px 12px", borderRadius: 999, border: `1px solid ${active ? "#169DE3" : "#282D37"}`,
+        background: active ? "rgba(22,157,227,0.14)" : "#171A21", color: active ? "#4BB8F0" : "#868D99",
+        fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 const btnStyle: React.CSSProperties = {
   background: "#169DE3", color: "#FFFFFF", border: "none", borderRadius: 8,
   padding: "10px 18px", fontWeight: 600, cursor: "pointer",
@@ -425,4 +526,15 @@ const btnStyle: React.CSSProperties = {
 const linkBtnStyle: React.CSSProperties = {
   background: "none", border: "none", color: "#169DE3", fontSize: 12.5,
   fontWeight: 600, cursor: "pointer", padding: 0,
+};
+
+const historySelectStyle: React.CSSProperties = {
+  padding: "7px 10px", background: "#171A21", border: "1px solid #282D37", borderRadius: 8,
+  color: "#ECEEF2", fontSize: 12.5, maxWidth: "100%",
+};
+
+const showMoreBtnStyle: React.CSSProperties = {
+  display: "block", width: "100%", marginTop: 10, padding: "10px 14px",
+  background: "#171A21", border: "1px solid #282D37", borderRadius: 10,
+  color: "#4BB8F0", fontWeight: 600, fontSize: 12.5, cursor: "pointer",
 };

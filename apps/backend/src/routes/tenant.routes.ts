@@ -2,7 +2,7 @@
 import { Router } from "express";
 import {
   signupTenant,
-  connectFlutterwaveSubaccount,
+  submitSettlementDetails,
   getMyTenant,
   updateMyTenant,
   listTenants,
@@ -19,7 +19,7 @@ router.post("/tenants/signup", signupTenant);
 // Any admin of their own tenant
 router.get("/admin/tenant", requireAdminAuth, getMyTenant);
 router.patch("/admin/tenant", requireAdminAuth, updateMyTenant);
-router.post("/admin/tenant/connect-flutterwave", requireAdminAuth, connectFlutterwaveSubaccount);
+router.post("/admin/tenant/settlement-details", requireAdminAuth, submitSettlementDetails);
 
 // Platform (RunServ staff) only
 router.get("/admin/platform/tenants", requireAdminAuth, requirePlatformAdmin, listTenants);

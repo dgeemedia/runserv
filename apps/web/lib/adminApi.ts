@@ -19,7 +19,7 @@ import type {
   TenantWithCounts,
   TenantSignupRequest,
   TenantSignupResponse,
-  ConnectFlutterwaveRequest,
+  SubmitSettlementDetailsRequest,
   UpdateMyTenantRequest,
   PlatformUpdateTenantRequest,
 } from "@runserver/types";
@@ -89,13 +89,13 @@ export async function updateMyTenant(payload: UpdateMyTenantRequest) {
   return handle<{ tenant: Tenant }>(res);
 }
 
-export async function connectFlutterwaveSubaccount(payload: ConnectFlutterwaveRequest) {
-  const res = await fetch(`${API_URL}/admin/tenant/connect-flutterwave`, {
+export async function submitSettlementDetails(payload: SubmitSettlementDetailsRequest) {
+  const res = await fetch(`${API_URL}/admin/tenant/settlement-details`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
   });
-  return handle<{ tenant: Pick<Tenant, "id" | "status" | "flutterwaveSubaccountId"> }>(res);
+  return handle<{ tenant: Tenant }>(res);
 }
 
 // ---- Platform-only (RunServ staff managing every agency tenant) ----------

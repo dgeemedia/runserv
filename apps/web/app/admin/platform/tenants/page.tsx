@@ -103,6 +103,7 @@ function TenantRow({
   const [feePct, setFeePct] = useState(tenant.feePct);
   const [flatFeeUsd, setFlatFeeUsd] = useState(tenant.flatFeeUsd ?? "0");
   const [status, setStatus] = useState<TenantStatus>(tenant.status);
+  const [subaccountId, setSubaccountId] = useState(tenant.flutterwaveSubaccountId ?? "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -118,6 +119,7 @@ function TenantRow({
         feePct: feeModel === "FLAT_SUBSCRIPTION" ? undefined : Number(feePct),
         flatFeeUsd: feeModel === "FLAT_SUBSCRIPTION" ? Number(flatFeeUsd) : undefined,
         status,
+        flutterwaveSubaccountId: subaccountId && subaccountId !== tenant.flutterwaveSubaccountId ? subaccountId : undefined,
       });
       await onSaved();
       setSaved(true);
@@ -153,6 +155,45 @@ function TenantRow({
 
       {expanded && (
         <form onSubmit={handleSave} style={{ padding: "0 18px 18px", borderTop: "1px solid #282D37" }}>
+          {/* Settlement — bank details the agency submitted, and the sub-account
+              ID staff attach once they've created it by hand in Flutterwave.
+              Subaccounts live under RunServ's own Flutterwave account, so the
+              agency can never create this themselves — see tenant.controller.ts. */}
+          <div style={{ marginTop: 16, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: "#868D99", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+              Settlement
+            </div>
+            {tenant.settlementSubmittedAt ? (
+              <div style={{ background: "#0F1115", border: "1px solid #282D37", borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 13 }}>
+                <Detail label="Country" value={tenant.settlementCountry} />
+                <Detail label="Bank" value={tenant.settlementBankName} />
+                <Detail label="Account number" value={tenant.settlementAccountNumber} mono />
+                <Detail label="Account name" value={tenant.settlementAccountName} />
+                <div style={{ fontSize: 11.5, color: "#868D99", marginTop: 6 }}>
+                  Submitted {new Date(tenant.settlementSubmittedAt).toLocaleDateString()} — create the sub-account in
+                  Flutterwave using this local account number, then paste the resulting ID below.
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: "#868D99", marginBottom: 12 }}>
+                No settlement details submitted yet — nothing to create a sub-account from.
+              </div>
+            )}
+          </div>
+
+          <label style={labelStyle}>Flutterwave sub-account ID</label>
+          <input
+            value={subaccountId}
+            onChange={(e) => setSubaccountId(e.target.value)}
+            placeholder="RS_XXXXXXXXXXXXXXX"
+            style={inputStyle}
+          />
+          {tenant.flutterwaveOnboardedAt && (
+            <div style={{ fontSize: 11.5, color: "#868D99", marginTop: -2, marginBottom: 4 }}>
+              Connected {new Date(tenant.flutterwaveOnboardedAt).toLocaleDateString()}
+            </div>
+          )}
+
           <label style={labelStyle}>Tenant status</label>
           <select value={status} onChange={(e) => setStatus(e.target.value as TenantStatus)} style={inputStyle}>
             <option value="PENDING_ONBOARDING">Pending onboarding</option>
@@ -189,6 +230,16 @@ function TenantRow({
           </button>
         </form>
       )}
+    </div>
+  );
+}
+
+function Detail({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
+  if (!value) return null;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+      <span style={{ color: "#868D99" }}>{label}</span>
+      <span style={{ fontFamily: mono ? "monospace" : undefined }}>{value}</span>
     </div>
   );
 }

@@ -166,6 +166,11 @@ export interface Tenant {
   supportEmail: string | null;
   flutterwaveSubaccountId: string | null;
   flutterwaveOnboardedAt: string | null;
+  settlementBankName: string | null;
+  settlementAccountNumber: string | null;
+  settlementAccountName: string | null;
+  settlementCountry: string | null;
+  settlementSubmittedAt: string | null;
   feeModel: TenantFeeModel;
   feePct: string; // Decimal serialized as string over the wire
   flatFeeUsd: string | null;
@@ -192,8 +197,13 @@ export interface TenantSignupResponse {
   nextStep: "connect_payment";
 }
 
-export interface ConnectFlutterwaveRequest {
-  flutterwaveSubaccountId: string;
+// Submitted by the agency; RunServ staff use it to create the actual
+// Flutterwave sub-account by hand (see schema.prisma on Tenant).
+export interface SubmitSettlementDetailsRequest {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  country: string;
 }
 
 export interface UpdateMyTenantRequest {
@@ -207,6 +217,7 @@ export interface PlatformUpdateTenantRequest {
   flatFeeUsd?: number;
   status?: TenantStatus;
   isActive?: boolean;
+  flutterwaveSubaccountId?: string;
 }
 
 // ---- Contact enquiries (marketing site) -----------------------

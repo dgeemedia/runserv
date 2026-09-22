@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMyTenant, updateMyTenant, connectFlutterwaveSubaccount } from "../../../lib/adminApi";
+import { getMyTenant, updateMyTenant, submitSettlementDetails } from "../../../lib/adminApi";
 import AdminBackLink from "../../../components/AdminBackLink";
 import type { Tenant } from "@runserver/types";
 
@@ -22,16 +22,22 @@ export default function TenantSettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState("");
 
-  const [subaccountId, setSubaccountId] = useState("");
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [country, setCountry] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   async function refresh() {
     const { tenant } = await getMyTenant();
     setTenant(tenant);
     setName(tenant.name);
     setSupportEmail(tenant.supportEmail ?? "");
-    setSubaccountId(tenant.flutterwaveSubaccountId ?? "");
+    setBankName(tenant.settlementBankName ?? "");
+    setAccountNumber(tenant.settlementAccountNumber ?? "");
+    setAccountName(tenant.settlementAccountName ?? "");
+    setCountry(tenant.settlementCountry ?? "");
   }
 
   useEffect(() => {
@@ -55,17 +61,17 @@ export default function TenantSettingsPage() {
     }
   }
 
-  async function handleConnect(e: React.FormEvent) {
+  async function handleSubmitSettlement(e: React.FormEvent) {
     e.preventDefault();
-    setConnectError("");
-    setConnecting(true);
+    setSubmitError("");
+    setSubmitting(true);
     try {
-      await connectFlutterwaveSubaccount({ flutterwaveSubaccountId: subaccountId });
+      await submitSettlementDetails({ bankName, accountNumber, accountName, country });
       await refresh();
     } catch (err: any) {
-      setConnectError(err.message);
+      setSubmitError(err.message);
     } finally {
-      setConnecting(false);
+      setSubmitting(false);
     }
   }
 
@@ -99,7 +105,7 @@ export default function TenantSettingsPage() {
           />
           <span style={{ fontSize: 13, fontWeight: 600 }}>
             {tenant.status === "ACTIVE" && "Active — checkouts are live"}
-            {tenant.status === "PENDING_ONBOARDING" && "Pending — connect Flutterwave below to start accepting payments"}
+            {tenant.status === "PENDING_ONBOARDING" && "Pending — submit your settlement details below to start accepting payments"}
             {tenant.status === "SUSPENDED" && "Suspended by RunServ — contact support"}
           </span>
         </div>
@@ -127,20 +133,30 @@ export default function TenantSettingsPage() {
 
         <div style={{ height: 1, background: "#282D37", margin: "0 0 28px" }} />
 
-        {/* Flutterwave connection — not relevant for the platform's own internal tenant */}
+        {/* Payment settlement — not relevant for the platform's own internal tenant.
+            Flutterwave sub-accounts live under RunServ's own Flutterwave account, so
+            the agency can't create one themselves. They submit settlement bank
+            details here; RunServ staff create the sub-account by hand in Flutterwave
+            (whose sub-account form takes a local bank account number directly, for
+            countries Flutterwave supports) and attach the resulting ID from the
+            platform tenants screen — see tenant.controller.ts. */}
         {!isPlatform && (
           <>
             <h2 style={{ fontSize: 15, fontWeight: 600, margin: "0 0 8px" }}>Payment settlement</h2>
             <p style={{ color: "#868D99", fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
               Your clients' payments split automatically at checkout: your share settles straight to your own
-              Flutterwave sub-account, and RunServ's fee (see billing terms below) is retained separately.
-              {" "}Create a sub-account in your Flutterwave dashboard, then paste its ID here.
+              account, and RunServ's fee (see billing terms below) is retained separately. RunServ sets this up
+              for you — submit your settlement bank details below and we'll create your dedicated payout account
+              and connect it here.
             </p>
 
             {isConnected ? (
               <div style={{ background: "#171A21", border: "1px solid #282D37", borderRadius: 12, padding: 16, marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "#868D99", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
-                  Connected Flutterwave sub-account
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80" }} />
+                  <span style={{ fontSize: 11, color: "#868D99", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Payout account connected
+                  </span>
                 </div>
                 <div style={{ fontFamily: "monospace", fontSize: 13.5 }}>{tenant.flutterwaveSubaccountId}</div>
                 {tenant.flutterwaveOnboardedAt && (
@@ -149,19 +165,48 @@ export default function TenantSettingsPage() {
                   </div>
                 )}
               </div>
+            ) : tenant.settlementSubmittedAt ? (
+              <div
+                style={{
+                  display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 16px", borderRadius: 10, marginBottom: 16,
+                  background: "rgba(250,204,21,0.08)", border: "1px solid rgba(250,204,21,0.3)",
+                }}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FACC15", marginTop: 4, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Settlement details received</div>
+                  <div style={{ fontSize: 12.5, color: "#868D99", marginTop: 3, lineHeight: 1.5 }}>
+                    Submitted {new Date(tenant.settlementSubmittedAt).toLocaleDateString()}. RunServ is setting up your
+                    payout account — you'll see it appear here once it's connected. You can update your details below
+                    any time before then.
+                  </div>
+                </div>
+              </div>
             ) : null}
 
-            <form onSubmit={handleConnect} style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
-              <label style={labelStyle}>{isConnected ? "Update sub-account ID" : "Flutterwave sub-account ID"}</label>
-              <input
-                value={subaccountId}
-                onChange={(e) => setSubaccountId(e.target.value)}
-                placeholder="RS_XXXXXXXXXXXXXXX"
-                style={inputStyle}
-              />
-              {connectError && <p style={{ color: "#F87171", fontSize: 13 }}>{connectError}</p>}
-              <button type="submit" disabled={connecting || !subaccountId} style={{ ...btnStyle, marginTop: 8 }}>
-                {connecting ? "Connecting…" : isConnected ? "Update connection" : "Connect Flutterwave"}
+            <form onSubmit={handleSubmitSettlement} style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+              <label style={labelStyle}>Country</label>
+              <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Nigeria" style={inputStyle} />
+
+              <label style={labelStyle}>Bank name</label>
+              <input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="GTBank" style={inputStyle} />
+
+              <label style={labelStyle}>Account number</label>
+              <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="0123456789" style={inputStyle} />
+              <div style={{ fontSize: 11.5, color: "#868D99", marginTop: -2, marginBottom: 4 }}>
+                Your local account number — Flutterwave's sub-account form accepts this directly for supported countries.
+              </div>
+
+              <label style={labelStyle}>Account name</label>
+              <input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Acme Studio Ltd" style={inputStyle} />
+
+              {submitError && <p style={{ color: "#F87171", fontSize: 13 }}>{submitError}</p>}
+              <button
+                type="submit"
+                disabled={submitting || !bankName || !accountNumber || !accountName || !country}
+                style={{ ...btnStyle, marginTop: 8 }}
+              >
+                {submitting ? "Submitting…" : tenant.settlementSubmittedAt ? "Update settlement details" : "Submit settlement details"}
               </button>
             </form>
 

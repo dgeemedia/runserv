@@ -49,9 +49,23 @@ model Tenant {
   supportEmail String?
 
   // Flutterwave split-payment settlement target for this tenant.
-  // Null until they complete onboarding step 2 (connect payment).
+  // Null until RunServ staff create the actual sub-account in
+  // Flutterwave (see settlement* fields below) and attach its ID here.
   flutterwaveSubaccountId String?
   flutterwaveOnboardedAt  DateTime?
+
+  // Settlement bank details the agency submits during onboarding.
+  // Flutterwave sub-accounts live under RunServ's own Flutterwave
+  // account, so the agency can't create one themselves — RunServ
+  // staff create it manually (Flutterwave's subaccount form accepts
+  // a local bank account number for supported countries) using these
+  // details, then paste the resulting sub-account ID above via the
+  // platform tenants screen. Null until the agency submits the form.
+  settlementBankName      String?
+  settlementAccountNumber String?
+  settlementAccountName   String?
+  settlementCountry       String?
+  settlementSubmittedAt   DateTime?
 
   // Platform fee RunServ takes from this tenant's transactions.
   feeModel  TenantFeeModel @default(TRANSACTION_PCT)

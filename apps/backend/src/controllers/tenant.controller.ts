@@ -61,38 +61,46 @@ export async function signupTenant(req: Request, res: Response) {
     token,
     admin: { id: admin.id, email: admin.email, name: admin.name },
     tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug, status: tenant.status },
-    nextStep: "connect_payment", // frontend should route here — see connectFlutterwaveSubaccount below
+    nextStep: "connect_payment", // frontend should route here — see submitSettlementDetails below
   });
 }
 
 // ------------------------------------------------------------------
-// POST /admin/tenant/connect-flutterwave
-// Step 2 of onboarding. Any admin of the calling tenant can complete
-// this. For v1, the tenant creates their Flutterwave sub-account
-// themselves (via Flutterwave's dashboard or API using their own
-// Flutterwave account) and pastes the resulting sub-account ID here —
-// fully automating sub-account creation via Flutterwave's API on
-// RunServ's behalf is a reasonable v2 (see IMPLEMENTATION.md open
-// questions on which Flutterwave product/flow fits best).
+// POST /admin/tenant/settlement-details
+// Step 2 of onboarding. Flutterwave sub-accounts always live under
+// RunServ's own Flutterwave account — an agency has no Flutterwave
+// account of its own to create one from — so the agency can't create
+// their sub-account themselves. Instead they submit the settlement
+// bank details here, RunServ staff create the sub-account by hand in
+// the Flutterwave dashboard (which accepts a local bank account
+// number directly on the sub-account form for supported countries),
+// and a platform admin then attaches the resulting sub-account ID via
+// updateTenantAsPlatform below, which is what actually flips the
+// tenant to ACTIVE.
 // ------------------------------------------------------------------
-const connectSchema = z.object({
-  flutterwaveSubaccountId: z.string().min(3),
+const settlementDetailsSchema = z.object({
+  bankName: z.string().min(2),
+  accountNumber: z.string().min(4),
+  accountName: z.string().min(2),
+  country: z.string().min(2),
 });
 
-export async function connectFlutterwaveSubaccount(req: AdminRequest, res: Response) {
-  const parsed = connectSchema.safeParse(req.body);
+export async function submitSettlementDetails(req: AdminRequest, res: Response) {
+  const parsed = settlementDetailsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message });
 
   const tenant = await prisma.tenant.update({
     where: { id: req.admin!.tenantId },
     data: {
-      flutterwaveSubaccountId: parsed.data.flutterwaveSubaccountId,
-      flutterwaveOnboardedAt: new Date(),
-      status: "ACTIVE",
+      settlementBankName: parsed.data.bankName,
+      settlementAccountNumber: parsed.data.accountNumber,
+      settlementAccountName: parsed.data.accountName,
+      settlementCountry: parsed.data.country,
+      settlementSubmittedAt: new Date(),
     },
   });
 
-  return res.json({ tenant: { id: tenant.id, status: tenant.status, flutterwaveSubaccountId: tenant.flutterwaveSubaccountId } });
+  return res.json({ tenant });
 }
 
 // ------------------------------------------------------------------
@@ -136,13 +144,16 @@ export async function listTenants(_req: AdminRequest, res: Response) {
   return res.json({ tenants });
 }
 
-// PATCH /admin/platform/tenants/:tenantId — fee model, suspend/reactivate
+// PATCH /admin/platform/tenants/:tenantId — fee model, suspend/reactivate,
+// and attaching the Flutterwave sub-account ID once RunServ staff have
+// created it by hand (see submitSettlementDetails above).
 const platformUpdateTenantSchema = z.object({
   feeModel: z.enum(["TRANSACTION_PCT", "FX_SPREAD_SHARE", "FLAT_SUBSCRIPTION"]).optional(),
   feePct: z.number().min(0).max(100).optional(),
   flatFeeUsd: z.number().min(0).optional(),
   status: z.enum(["PENDING_ONBOARDING", "ACTIVE", "SUSPENDED"]).optional(),
   isActive: z.boolean().optional(),
+  flutterwaveSubaccountId: z.string().min(3).optional(),
 });
 
 // GET /admin/platform/tenants/:tenantId/audit-log
@@ -162,9 +173,21 @@ export async function updateTenantAsPlatform(req: AdminRequest, res: Response) {
 
   const before = await prisma.tenant.findUniqueOrThrow({ where: { id: req.params.tenantId } });
 
+  // Attaching a sub-account ID for the first time is what actually
+  // completes onboarding — auto-stamp the connection time and, unless
+  // the caller explicitly set a different status in this same request,
+  // move the tenant to ACTIVE so staff don't have to remember a second step.
+  const { flutterwaveSubaccountId, ...rest } = parsed.data;
+  const isFirstConnection = !!flutterwaveSubaccountId && !before.flutterwaveSubaccountId;
+
   const tenant = await prisma.tenant.update({
     where: { id: req.params.tenantId },
-    data: parsed.data,
+    data: {
+      ...rest,
+      ...(flutterwaveSubaccountId ? { flutterwaveSubaccountId } : {}),
+      ...(isFirstConnection ? { flutterwaveOnboardedAt: new Date() } : {}),
+      ...(isFirstConnection && parsed.data.status === undefined ? { status: "ACTIVE" as const } : {}),
+    },
   });
 
   // Every platform-level change to a tenant's rules is logged — this is

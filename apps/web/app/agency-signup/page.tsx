@@ -59,8 +59,8 @@ export default function AgencySignupPage() {
         <h1 style={{ fontSize: 20, margin: "0 0 8px" }}>Bill your clients through RunServ</h1>
         <p style={{ color: "#868D99", fontSize: 13, lineHeight: 1.5, marginBottom: 24 }}>
           One dashboard for every client's hosting, API, and infra costs — itemized, marked up, and billed in
-          USD or NGN. You'll connect your own Flutterwave sub-account next, so your clients' payments settle
-          straight to you.
+          USD or NGN. Next, you'll submit your settlement bank details — RunServ sets up your dedicated payout
+          account so your clients' payments settle straight to you.
         </p>
 
         <label style={labelStyle}>Agency / business name</label>
